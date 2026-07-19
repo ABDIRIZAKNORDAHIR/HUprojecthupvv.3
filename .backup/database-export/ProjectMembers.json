@@ -1,0 +1,34 @@
+[
+  {
+    "ProjectMemberId": 7,
+    "ProjectId": 7,
+    "StudentId": 8,
+    "InvitedByStudentId": 8,
+    "JoinedAt": "2026-06-14T12:02:11.215Z",
+    "MemberNote": "Project owner"
+  },
+  {
+    "ProjectMemberId": 8,
+    "ProjectId": 8,
+    "StudentId": 15,
+    "InvitedByStudentId": 15,
+    "JoinedAt": "2026-06-14T12:49:01.166Z",
+    "MemberNote": null
+  },
+  {
+    "ProjectMemberId": 10,
+    "ProjectId": 10,
+    "StudentId": 16,
+    "InvitedByStudentId": 16,
+    "JoinedAt": "2026-06-14T12:49:01.191Z",
+    "MemberNote": null
+  },
+  {
+    "ProjectMemberId": 14,
+    "ProjectId": 14,
+    "StudentId": 20,
+    "InvitedByStudentId": 20,
+    "JoinedAt": "2026-06-14T13:30:40.447Z",
+    "MemberNote": "Project owner"
+  }
+]

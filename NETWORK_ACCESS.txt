@@ -1,0 +1,63 @@
+ProjectHub — Access from Other Computers
+=========================================
+
+YES — other computers CAN use ProjectHub and see the SAME data
+(projects, users, teams, submissions) IF they connect to YOUR
+computer while it is running. Everything is stored in ONE SQL
+Server database on your PC.
+
+BY DEFAULT (before network setup)
+---------------------------------
+- Only THIS computer can open http://localhost:5180/
+- Other PCs get "cannot connect" unless you follow the steps below
+
+NOT from the public internet
+----------------------------
+- Students far away (different city/Wi‑Fi) cannot access unless you
+  deploy to a cloud server or set up VPN/port forwarding (not recommended
+  for a school lab without IT help).
+
+HOW OTHER COMPUTERS CONNECT (same Wi‑Fi / same building LAN)
+----------------------------------------------------------
+
+1. On YOUR computer (the server):
+   - Run LAUNCH_APP.bat or START.bat
+   - Keep "ProjectHub API" and "ProjectHub UI" windows OPEN
+   - Find your IP address:
+     Open CMD and type:  ipconfig
+     Look for "IPv4 Address" e.g. 192.168.1.105
+
+2. On OTHER computers (students/teachers):
+   - Same Wi‑Fi or wired network as your server PC
+   - Open browser and go to:
+     http://YOUR_IP:5180/
+     Example: http://192.168.1.105:5180/
+
+3. Windows Firewall (one-time on YOUR PC):
+   - Allow ports 5180 and 3004 when Windows asks
+   - Or: Windows Security → Firewall → Allow an app
+     Allow Node.js for Private networks
+
+WHAT THEY SEE
+-------------
+- Same homepage, sign-in, projects — all shared
+- New registrations → saved in YOUR SQL Server (ProjectHub database)
+- You see everything in Admin panel and SSMS
+
+WHAT STAYS PRIVATE ON YOUR PC
+-----------------------------
+- SQL Server itself (other PCs never connect to SQL directly)
+- Only the ProjectHub app on your PC talks to the database
+
+ADMIN / TEACHER / STUDENT LINKS (replace YOUR_IP)
+-------------------------------------------------
+  http://YOUR_IP:5180/
+  http://YOUR_IP:5180/student
+  http://YOUR_IP:5180/teacher
+  http://YOUR_IP:5180/admin
+
+TROUBLESHOOTING
+---------------
+- "Site can't be reached" → check firewall, same Wi‑Fi, server running
+- Page loads but login fails → restart START.bat on server PC
+- Slow → normal on Wi‑Fi; one server PC handles all users

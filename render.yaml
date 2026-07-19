@@ -1,0 +1,33 @@
+# Free cloud deploy for Hormuud ProjectHub
+# 1. Create free Supabase project → copy DATABASE_URL
+# 2. Push this repo to GitHub
+# 3. Connect Render.com → New Web Service → use this blueprint
+# 4. Set env vars: DATABASE_URL, GROQ_API_KEY, JWT_SECRET
+
+services:
+  - type: web
+    name: hormuud-projecthub
+    runtime: node
+    plan: free
+    buildCommand: npm install && npm run build && cd server && npm install
+    startCommand: node server/src/setupDatabasePg.js && node server/src/seed.js && node server/src/index.js
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: SERVE_STATIC
+        value: "true"
+      - key: PUBLIC_DEPLOY
+        value: "true"
+      - key: DB_DRIVER
+        value: postgres
+      - key: PORT
+        value: "10000"
+      - key: DATABASE_URL
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: AI_PROVIDER
+        value: groq
+      - key: JWT_SECRET
+        generateValue: true

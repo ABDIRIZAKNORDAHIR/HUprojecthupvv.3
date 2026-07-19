@@ -1,0 +1,98 @@
+================================================================================
+  PROJECTHUB — HOW TO ENABLE REAL AI FOR TEACHERS (5 minutes)
+================================================================================
+
+ProjectHub uses REAL AI (OpenAI ChatGPT and/or Google Gemini) — not fake or mock AI.
+You need your own API key (small cost per use, usually a few cents per project review).
+
+--------------------------------------------------------------------------------
+OPTION A — OpenAI ChatGPT
+--------------------------------------------------------------------------------
+
+1. Open:  https://platform.openai.com/api-keys
+2. Create a secret key (starts with sk-proj- or sk-)
+3. In .env add:
+   OPENAI_API_KEY=sk-proj-xxxxxxxx
+
+Optional billing: https://platform.openai.com/settings/organization/billing
+(gpt-4o-mini is very cheap)
+
+--------------------------------------------------------------------------------
+OPTION B — Google Gemini
+--------------------------------------------------------------------------------
+
+1. Open:  https://aistudio.google.com/apikey
+2. Create an API key
+3. In .env add:
+   GEMINI_API_KEY=your-gemini-key-here
+
+Gemini has a generous free tier for development.
+
+--------------------------------------------------------------------------------
+OPTION C — Both (recommended for reliability)
+--------------------------------------------------------------------------------
+
+Add BOTH keys to .env. ProjectHub uses AI_PROVIDER=auto:
+  • Tries OpenAI first if OPENAI_API_KEY is set
+  • Falls back to Gemini if OpenAI fails (AI_FALLBACK=true)
+
+--------------------------------------------------------------------------------
+STEP — Paste key into .env
+--------------------------------------------------------------------------------
+
+1. Open:  .env  (project root folder)
+2. Uncomment and set ONE or BOTH keys:
+
+   OPENAI_API_KEY=sk-proj-xxxxxxxx
+   GEMINI_API_KEY=AIzaSyxxxxxxxx
+
+3. Save the file. Do NOT commit keys to GitHub.
+
+--------------------------------------------------------------------------------
+TEST THAT AI WORKS
+--------------------------------------------------------------------------------
+
+   cd server
+   npm run test-ai
+
+   You should see:  "SUCCESS: Real AI is ready for teachers!"
+
+--------------------------------------------------------------------------------
+RESTART PROJECTHUB
+--------------------------------------------------------------------------------
+
+1. Close the "ProjectHub API" window
+2. Double-click:  START_HERE.bat
+3. Log in as teacher (swilliams@hu.edu / ProjectHub123!)
+
+--------------------------------------------------------------------------------
+WHAT ADVANCED AI DOES FOR TEACHERS
+--------------------------------------------------------------------------------
+
+• Reads project title, description, files, and student messages
+• Explains what the project is mostly about (balanced, specific)
+• Lists what that type of project should contain
+• Compares student work vs expectations (strengths + gaps)
+• Recommends: APPROVE, REJECT, or REQUEST CHANGES with confidence %
+• AI Review Queue shows real verdicts (not fake heuristics)
+• Teacher can ask follow-up questions (like ChatGPT)
+
+Students never see the AI briefing — teacher only.
+
+--------------------------------------------------------------------------------
+TROUBLESHOOTING
+--------------------------------------------------------------------------------
+
+"Real AI is not configured"
+  → No OPENAI_API_KEY or GEMINI_API_KEY in .env
+  → Restart API after editing .env
+
+"AI auth failed"
+  → Wrong or expired API key — create a new one
+
+"AI rate limit"
+  → Wait, or add the other provider as fallback
+
+Still stuck? Run:  cd server && npm run test-ai
+
+================================================================================

@@ -1,0 +1,62 @@
+================================================================================
+  FREE AI FOR PROJECTHUB — NO CREDIT CARD, NO DOLLARS
+================================================================================
+
+Your OpenAI and Gemini keys ran out of free quota / need billing.
+Use GROQ instead — it is 100% FREE for students and developers.
+
+--------------------------------------------------------------------------------
+OPTION 1 — GROQ (RECOMMENDED — 2 minutes)
+--------------------------------------------------------------------------------
+
+1. Double-click:  SETUP_FREE_AI.bat
+
+2. Browser opens → https://console.groq.com/keys
+   - Sign up with Google or email (FREE, no credit card)
+   - Click "Create API Key"
+   - Copy the key (starts with gsk_)
+
+3. Paste the key when SETUP_FREE_AI.bat asks
+
+4. Restart:  START_HERE.bat
+
+5. Log in as teacher → open a project → Re-analyze project
+
+Free limits: 30 requests/minute — enough for university project review.
+
+--------------------------------------------------------------------------------
+OPTION 2 — GOOGLE GEMINI (free with new Google account)
+--------------------------------------------------------------------------------
+
+1. Open: https://aistudio.google.com/apikey
+2. Create key (must start with AIzaSy...)
+3. Run SETUP_AI_KEY.bat → choose Gemini → paste key
+4. In .env set: AI_PROVIDER=gemini
+5. Restart START_HERE.bat
+
+Use a different Google account if quota is used up.
+
+--------------------------------------------------------------------------------
+OPTION 3 — OLLAMA (100% free, runs on YOUR computer, offline)
+--------------------------------------------------------------------------------
+
+1. Install: https://ollama.com/download
+2. Open terminal and run:
+     ollama pull llama3.2
+3. In .env add:
+     OLLAMA_ENABLED=true
+     AI_PROVIDER=ollama
+     OLLAMA_MODEL=llama3.2
+4. Restart START_HERE.bat
+
+Needs ~4GB RAM. No internet needed after download.
+
+--------------------------------------------------------------------------------
+WHICH IS BEST FOR YOU?
+--------------------------------------------------------------------------------
+
+  No money at all     →  GROQ (SETUP_FREE_AI.bat)  ← START HERE
+  No internet later   →  Ollama
+  Already have Google →  Gemini (new AIzaSy key)
+
+================================================================================

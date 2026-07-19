@@ -1,0 +1,103 @@
+================================================================================
+  OPTION B — 24/7 ONLINE (follow in order, check each box)
+================================================================================
+
+Double-click OPTION_B_START.bat to open this file + Supabase + GitHub + Render.
+
+
+STEP 1 — SUPABASE (cloud database)                    ~10 minutes
+──────────────────────────────────────────────────
+1. Go to https://supabase.com → Sign up (free)
+2. New project
+   • Name: projecthub
+   • Password: pick one and WRITE IT DOWN
+   • Region: Frankfurt or Mumbai (closest to you)
+3. Wait until project is ready (green)
+4. Settings (gear) → Database → Connection string → URI
+5. Copy the URI
+6. Replace [YOUR-PASSWORD] with your real password
+7. Paste into Notepad — label it DATABASE_URL
+
+   Example shape:
+   postgresql://postgres.xxxxx:YOUR_PASSWORD@aws-0-eu-central-1.pooler.supabase.com:6543/postgres
+
+
+STEP 2 — GITHUB (upload your code)                    ~15 minutes
+──────────────────────────────────────────────────
+IMPORTANT: .gitignore is set — your .env file will NOT be uploaded (safe).
+
+1. Install GitHub Desktop: https://desktop.github.com
+2. Create free account at github.com if needed
+3. GitHub Desktop → File → Add local repository
+   Folder: C:\Users\25261\Downloads\Design ProjectHub UI_UX
+4. If asked → Create repository → name: hormuud-projecthub
+5. Click "Publish repository" → Publish
+6. Remember your GitHub username (e.g. ahmed123)
+
+
+STEP 3 — RENDER (host the app 24/7)                   ~10 minutes
+──────────────────────────────────────────────────
+1. Go to https://render.com → Sign up with GitHub
+2. New + → Blueprint
+3. Connect GitHub → select hormuud-projecthub repo
+4. Click Apply (Render reads render.yaml automatically)
+5. Click service "hormuud-projecthub" → Environment tab
+6. Add these TWO variables (click Add Environment Variable):
+
+   Key: DATABASE_URL
+   Value: (paste Supabase URI from Step 1)
+
+   Key: GROQ_API_KEY
+   Value: (open your .env file in project folder — copy GROQ_API_KEY line value)
+          Or run SETUP_FREE_AI.bat if you need a new key
+
+7. Save Changes → wait for deploy (5–15 min, status = Live)
+
+
+STEP 4 — YOUR PERMANENT LINK
+──────────────────────────────────────────────────
+When Render shows Live, copy the URL at the top, e.g.:
+  https://hormuud-projecthub.onrender.com
+
+Test in browser:
+  • Homepage loads
+  • Login: swilliams@hu.edu / ProjectHub123!
+
+
+STEP 5 — DESKTOP APP (optional)
+──────────────────────────────────────────────────
+1. Double-click SET_APP_URL.bat
+2. Paste your Render URL
+3. Share release\Hormuud-ProjectHub-1.0.0-Portable.exe with students
+
+
+SHARE WITH EVERYONE
+──────────────────────────────────────────────────
+  Link:    https://hormuud-projecthub.onrender.com  (your Render URL)
+  Password for all demo accounts: ProjectHub123!
+
+  Teacher: swilliams@hu.edu
+  Student: alex.chen@hu.edu
+  Admin:   admin@hu.edu
+
+Phone: open link in Chrome → Install app / Add to Home Screen
+
+
+IF DEPLOY FAILS
+──────────────────────────────────────────────────
+Render → hormuud-projecthub → Logs tab
+
+Common fixes:
+  • DATABASE_URL wrong password → fix in Supabase, update Render env
+  • Missing GROQ_API_KEY → add in Environment
+  • First deploy slow → wait 10 more minutes
+
+
+YOU ARE DONE WHEN
+──────────────────────────────────────────────────
+  [ ] Render status = Live
+  [ ] Link opens ProjectHub homepage
+  [ ] Teacher login works
+  [ ] PC can be OFF and link still works
+
+================================================================================

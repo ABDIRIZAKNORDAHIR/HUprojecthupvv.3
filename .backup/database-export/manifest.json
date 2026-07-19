@@ -1,0 +1,43 @@
+{
+  "exportedAt": "2026-06-14T13:42:12.663Z",
+  "server": "AHMED666\\TEW_SQLEXPRESS",
+  "database": "ProjectHub",
+  "tables": {
+    "Users": {
+      "count": 10,
+      "file": "Users.json"
+    },
+    "Settings": {
+      "count": 8,
+      "file": "Settings.json"
+    },
+    "Projects": {
+      "count": 4,
+      "file": "Projects.json"
+    },
+    "ProjectMembers": {
+      "count": 4,
+      "file": "ProjectMembers.json"
+    },
+    "ProjectInvitations": {
+      "count": 0,
+      "file": "ProjectInvitations.json"
+    },
+    "Submissions": {
+      "count": 0,
+      "file": "Submissions.json"
+    },
+    "AIAnalyses": {
+      "count": 0,
+      "file": "AIAnalyses.json"
+    },
+    "Messages": {
+      "count": 9,
+      "file": "Messages.json"
+    },
+    "Notifications": {
+      "count": 11,
+      "file": "Notifications.json"
+    }
+  }
+}

@@ -1,0 +1,35 @@
+ProjectHub — Use as an Application
+==================================
+
+OPTION 1 — Desktop app window (recommended)
+-------------------------------------------
+Double-click:  LAUNCH_APP.bat
+
+This starts the server and opens ProjectHub in its own window
+(no browser address bar — looks like a real app).
+
+OPTION 2 — Install on desktop / phone (PWA)
+---------------------------------------------
+1. Run START.bat or LAUNCH_APP.bat
+2. Open http://localhost:5180/ in Edge or Chrome
+3. Click "Install" in the green banner at the bottom
+   OR use browser menu: Install ProjectHub / Add to desktop
+
+After install, open ProjectHub from your Start menu or home screen.
+
+OPTION 3 — Normal browser
+---------------------------
+Double-click:  START.bat
+Open:          http://localhost:5180/
+
+LINKS
+-----
+Homepage:   http://localhost:5180/
+Student:    http://localhost:5180/student
+Teacher:    http://localhost:5180/teacher
+Admin:      http://localhost:5180/admin  (see ADMIN_ACCESS.txt)
+
+NOTE
+----
+The API server must stay running (ProjectHub API window).
+Do not close it while using the application.

@@ -1,0 +1,50 @@
+[
+  {
+    "SettingKey": "ai_similarity_threshold",
+    "SettingValue": "60",
+    "UpdatedAt": "2026-06-14T13:20:50.286Z",
+    "UpdatedBy": 1
+  },
+  {
+    "SettingKey": "db_server",
+    "SettingValue": "AHMED666\\TEW_SQLEXPRESS",
+    "UpdatedAt": "2026-06-14T13:20:50.296Z",
+    "UpdatedBy": 1
+  },
+  {
+    "SettingKey": "logo_path",
+    "SettingValue": "/university-logo.png",
+    "UpdatedAt": "2026-06-14T13:20:50.306Z",
+    "UpdatedBy": 1
+  },
+  {
+    "SettingKey": "theme_accent",
+    "SettingValue": "#7C3AED",
+    "UpdatedAt": "2026-06-14T13:20:50.316Z",
+    "UpdatedBy": 1
+  },
+  {
+    "SettingKey": "theme_primary",
+    "SettingValue": "#16A34A",
+    "UpdatedAt": "2026-06-14T13:20:50.326Z",
+    "UpdatedBy": 1
+  },
+  {
+    "SettingKey": "theme_secondary",
+    "SettingValue": "#2563EB",
+    "UpdatedAt": "2026-06-14T13:20:50.332Z",
+    "UpdatedBy": 1
+  },
+  {
+    "SettingKey": "university_name",
+    "SettingValue": "Harvard University",
+    "UpdatedAt": "2026-06-14T13:20:50.346Z",
+    "UpdatedBy": 1
+  },
+  {
+    "SettingKey": "university_short",
+    "SettingValue": "HU",
+    "UpdatedAt": "2026-06-14T13:20:50.356Z",
+    "UpdatedBy": 1
+  }
+]

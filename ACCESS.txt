@@ -1,0 +1,65 @@
+========================================
+  ProjectHub — Access & Login Info
+========================================
+
+START THE APP
+  Double-click: START.bat
+  Wait for browser to open.
+
+MAIN URL
+  http://localhost:5180/
+
+PORTALS
+  Student   http://localhost:5180/student
+  Teacher   http://localhost:5180/teacher
+  Admin     http://localhost:5180/admin
+
+API (backend)
+  http://localhost:3004/api/health
+
+DO NOT USE port 5173 — use 5180 only.
+
+========================================
+  ADMIN LOGIN (email + password only)
+========================================
+  Email:          admin@hu.edu
+  Password:       ProjectHub123!
+  (No University ID needed for admin)
+
+========================================
+  DEMO ACCOUNTS (same password)
+========================================
+  Password for ALL: ProjectHub123!
+
+  Student
+    HU ID:  HU000-1001
+    Email:  alex.chen@hu.edu
+
+  Teacher
+    HU ID:  HU000-5001
+    Email:  swilliams@hu.edu
+
+  University ID format: HU000 + phone digits in groups of 4
+  Examples: HU000-1234  or  HU000-1234-5678
+
+========================================
+  SAVE YOUR PROJECT
+========================================
+  SAVE EVERYTHING (recommended):
+    Double-click: SAVE_EVERYTHING.bat
+    Saves code + dist + database + config
+
+  Quick code backup:
+    Double-click: SAVE.bat
+
+  Backups folder:
+    c:\Users\25261\Downloads\ProjectHub-Backups\
+    Latest full backup: ProjectHub-FULL-LATEST.zip
+
+PROJECT FOLDER
+  c:\Users\25261\Downloads\Design ProjectHub UI_UX
+
+DATABASE
+  MySQL:      localhost:3306
+  Database:   ProjectHub
+  User:       root

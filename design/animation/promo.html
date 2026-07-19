@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=1920, height=1080" />
+  <title>Hormuud ProjectHub — Cinematic Promo (45s)</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      width: 1920px; height: 1080px;
+      overflow: hidden;
+      background: #000;
+      font-family: 'Segoe UI', Inter, system-ui, sans-serif;
+      color: #fff;
+    }
+
+    :root {
+      --green: #16A34A;
+      --green-bright: #4ade80;
+      --navy: #0F2D5C;
+      --gray: #F8FAFC;
+    }
+
+    .stage {
+      position: relative;
+      width: 1920px; height: 1080px;
+      overflow: hidden;
+    }
+
+    .bg {
+      position: absolute; inset: 0;
+      background: radial-gradient(ellipse 70% 55% at 50% 35%, rgba(22,163,74,0.28) 0%, transparent 55%),
+                  linear-gradient(165deg, #000 0%, var(--navy) 42%, #061018 100%);
+    }
+    .bg-grid {
+      position: absolute; inset: 0;
+      background-image:
+        linear-gradient(rgba(22,163,74,0.06) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(22,163,74,0.06) 1px, transparent 1px);
+      background-size: 48px 48px;
+      opacity: 0.5;
+    }
+    .orb {
+      position: absolute; border-radius: 50%; filter: blur(90px);
+      animation: float 9s ease-in-out infinite alternate;
+    }
+    .orb-1 { width: 520px; height: 520px; background: rgba(22,163,74,0.35); top: -120px; right: -60px; }
+    .orb-2 { width: 420px; height: 420px; background: rgba(37,99,235,0.2); bottom: -80px; left: -60px; animation-delay: -4s; }
+    @keyframes float {
+      from { transform: translate(0,0) scale(1); }
+      to { transform: translate(-24px,18px) scale(1.06); }
+    }
+
+    .scene {
+      position: absolute; inset: 0;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      opacity: 0; pointer-events: none;
+      transition: opacity 0.9s cubic-bezier(0.22,1,0.36,1);
+    }
+    .scene.active { opacity: 1; }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(36px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes scaleIn {
+      from { opacity: 0; transform: scale(0.88); }
+      to { opacity: 1; transform: scale(1); }
+    }
+    @keyframes glowPulse {
+      0%, 100% { filter: drop-shadow(0 0 24px rgba(22,163,74,0.35)); }
+      50% { filter: drop-shadow(0 0 56px rgba(22,163,74,0.75)); }
+    }
+    @keyframes phoneBoot {
+      0% { opacity: 0; transform: scale(0.92); filter: brightness(0); }
+      30% { opacity: 1; transform: scale(1); filter: brightness(0.3); }
+      60% { filter: brightness(0.8); }
+      100% { filter: brightness(1); }
+    }
+    @keyframes screenGlow {
+      0% { box-shadow: inset 0 0 0 rgba(22,163,74,0); }
+      100% { box-shadow: inset 0 0 80px rgba(22,163,74,0.25); }
+    }
+    @keyframes countUp {
+      from { opacity: 0; transform: translateY(20px) scale(0.9); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    @keyframes voiceBar {
+      0%, 100% { transform: scaleY(0.4); }
+      50% { transform: scaleY(1); }
+    }
+
+    /* Scene 1 — Phone boot */
+    .phone-frame {
+      width: 340px; height: 700px;
+      border-radius: 48px;
+      background: linear-gradient(145deg, #1a1a1a, #0a0a0a);
+      padding: 14px;
+      box-shadow: 0 40px 100px rgba(0,0,0,0.6), 0 0 0 2px rgba(255,255,255,0.08);
+      animation: phoneBoot 2.5s cubic-bezier(0.22,1,0.36,1) forwards;
+      opacity: 0;
+    }
+    .phone-screen {
+      width: 100%; height: 100%;
+      border-radius: 36px;
+      background: #000;
+      overflow: hidden;
+      position: relative;
+      animation: screenGlow 2s ease 1.5s forwards;
+    }
+    .phone-notch {
+      position: absolute; top: 12px; left: 50%; transform: translateX(-50%);
+      width: 120px; height: 28px; background: #000; border-radius: 20px; z-index: 2;
+    }
+    .boot-logo {
+      position: absolute; inset: 0;
+      display: flex; align-items: center; justify-content: center;
+      animation: scaleIn 1.2s ease 2s forwards;
+      opacity: 0;
+    }
+    .boot-logo img { width: 200px; }
+    .boot-ring {
+      position: absolute; inset: 0;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .boot-ring::after {
+      content: '';
+      width: 80px; height: 80px;
+      border: 3px solid rgba(22,163,74,0.2);
+      border-top-color: var(--green);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      opacity: 0;
+      animation: spin 0.8s linear 1.2s infinite, fadeIn 0.3s ease 1.2s forwards;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes fadeIn { to { opacity: 1; } }
+    .scene-label {
+      position: absolute; bottom: 80px;
+      font-size: 18px; letter-spacing: 0.2em; text-transform: uppercase;
+      color: rgba(255,255,255,0.45);
+    }
+
+    /* Scene 2 — Logo */
+    .logo-hero img {
+      width: 780px; height: auto;
+      animation: scaleIn 1.4s cubic-bezier(0.22,1,0.36,1) forwards, glowPulse 3s ease-in-out 1.4s infinite;
+      opacity: 0;
+    }
+    .logo-tagline {
+      margin-top: 36px;
+      font-size: 42px; font-weight: 300; letter-spacing: 0.28em;
+      text-transform: uppercase;
+      animation: fadeUp 1s ease 0.8s forwards;
+      opacity: 0;
+    }
+    .logo-tagline em { color: var(--green); font-style: normal; font-weight: 700; }
+
+    /* Scene 3 & 4 — UI mockups */
+    .ui-mock {
+      width: 1400px; height: 780px;
+      border-radius: 24px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(22,163,74,0.25);
+      backdrop-filter: blur(20px);
+      box-shadow: 0 32px 80px rgba(0,0,0,0.45);
+      display: grid;
+      grid-template-columns: 240px 1fr;
+      overflow: hidden;
+      animation: scaleIn 1s ease forwards;
+      opacity: 0;
+    }
+    .ui-sidebar {
+      background: rgba(15,45,92,0.85);
+      padding: 28px 20px;
+      border-right: 1px solid rgba(255,255,255,0.06);
+    }
+    .ui-sidebar .logo-sm { width: 160px; margin-bottom: 32px; }
+    .ui-nav-item {
+      padding: 12px 16px; border-radius: 10px; margin-bottom: 6px;
+      font-size: 15px; color: rgba(255,255,255,0.65);
+    }
+    .ui-nav-item.active { background: rgba(22,163,74,0.25); color: #fff; font-weight: 600; }
+    .ui-main { padding: 32px 40px; }
+    .ui-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 28px; }
+    .ui-header h2 { font-size: 28px; font-weight: 700; }
+    .ui-badge {
+      padding: 8px 16px; border-radius: 999px;
+      background: rgba(22,163,74,0.2); border: 1px solid rgba(22,163,74,0.4);
+      font-size: 13px; font-weight: 600; color: var(--green-bright);
+    }
+    .ui-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+    .ui-card {
+      padding: 24px; border-radius: 16px;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+    .ui-card h3 { font-size: 16px; margin-bottom: 8px; }
+    .ui-card p { font-size: 13px; color: rgba(255,255,255,0.6); line-height: 1.5; }
+    .ui-progress {
+      height: 6px; border-radius: 3px; background: rgba(255,255,255,0.1);
+      margin-top: 16px; overflow: hidden;
+    }
+    .ui-progress span { display: block; height: 100%; background: var(--green); border-radius: 3px; }
+    .scene-title {
+      position: absolute; top: 72px;
+      font-size: 32px; font-weight: 700;
+      animation: fadeUp 0.8s ease forwards; opacity: 0;
+    }
+    .scene-title span { color: var(--green); }
+
+    /* Teacher review cards */
+    .review-stack { display: flex; flex-direction: column; gap: 16px; max-width: 900px; }
+    .review-card {
+      display: flex; align-items: center; gap: 24px;
+      padding: 24px 28px; border-radius: 16px;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.08);
+      animation: fadeUp 0.6s ease forwards; opacity: 0;
+    }
+    .review-card:nth-child(1) { animation-delay: 0.2s; }
+    .review-card:nth-child(2) { animation-delay: 0.45s; }
+    .review-card:nth-child(3) { animation-delay: 0.7s; }
+    .review-avatar {
+      width: 56px; height: 56px; border-radius: 14px;
+      background: linear-gradient(135deg, var(--green), #2563EB);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 22px; font-weight: 700;
+    }
+    .review-meta h3 { font-size: 18px; margin-bottom: 4px; }
+    .review-meta p { font-size: 14px; color: rgba(255,255,255,0.55); }
+    .review-actions { margin-left: auto; display: flex; gap: 10px; }
+    .btn-approve, .btn-reject {
+      padding: 10px 20px; border-radius: 10px; font-size: 14px; font-weight: 600; border: none;
+    }
+    .btn-approve { background: var(--green); color: #fff; }
+    .btn-reject { background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.7); }
+
+    /* Scene 5 — AI */
+    .ai-panel {
+      width: 1100px; padding: 40px 48px;
+      border-radius: 24px;
+      background: rgba(15,45,92,0.7);
+      border: 1px solid rgba(22,163,74,0.35);
+      backdrop-filter: blur(24px);
+      animation: scaleIn 1s ease forwards; opacity: 0;
+    }
+    .ai-header { display: flex; align-items: center; gap: 16px; margin-bottom: 28px; }
+    .ai-icon {
+      width: 52px; height: 52px; border-radius: 14px;
+      background: linear-gradient(135deg, var(--green), #2563EB);
+      display: flex; align-items: center; justify-content: center; font-size: 26px;
+    }
+    .ai-header h2 { font-size: 28px; }
+    .ai-header p { font-size: 15px; color: rgba(255,255,255,0.55); margin-top: 4px; }
+    .ai-message {
+      padding: 20px 24px; border-radius: 14px; margin-bottom: 14px;
+      background: rgba(255,255,255,0.05);
+      border-left: 3px solid var(--green);
+      font-size: 17px; line-height: 1.65; color: rgba(255,255,255,0.88);
+      animation: fadeUp 0.7s ease forwards; opacity: 0;
+    }
+    .ai-message:nth-child(2) { animation-delay: 0.35s; }
+    .ai-message:nth-child(3) { animation-delay: 0.65s; }
+    .ai-rec {
+      display: inline-flex; align-items: center; gap: 8px;
+      margin-top: 8px; padding: 10px 18px; border-radius: 999px;
+      background: rgba(22,163,74,0.25); font-weight: 600; font-size: 15px;
+      color: var(--green-bright);
+    }
+
+    /* Scene 6 — Stats */
+    .stats-row { display: flex; gap: 64px; }
+    .stat-block {
+      text-align: center;
+      animation: countUp 0.8s cubic-bezier(0.22,1,0.36,1) forwards;
+      opacity: 0;
+    }
+    .stat-block:nth-child(1) { animation-delay: 0.15s; }
+    .stat-block:nth-child(2) { animation-delay: 0.4s; }
+    .stat-block:nth-child(3) { animation-delay: 0.65s; }
+    .stat-num {
+      font-size: 96px; font-weight: 800; line-height: 1;
+      background: linear-gradient(135deg, var(--green), var(--green-bright));
+      -webkit-background-clip: text; background-clip: text; color: transparent;
+    }
+    .stat-label {
+      margin-top: 12px; font-size: 22px; color: rgba(255,255,255,0.65);
+      letter-spacing: 0.06em; text-transform: uppercase;
+    }
+
+    /* Scene 7 — Final hero */
+    .final-logo img { width: 640px; animation: scaleIn 1.2s ease forwards; opacity: 0; }
+    .final-headline {
+      margin-top: 32px; font-size: 52px; font-weight: 800;
+      animation: fadeUp 0.9s ease 0.5s forwards; opacity: 0;
+    }
+    .final-tagline {
+      margin-top: 16px; font-size: 24px; color: rgba(255,255,255,0.6);
+      letter-spacing: 0.15em; animation: fadeUp 0.9s ease 0.7s forwards; opacity: 0;
+    }
+    .voiceover {
+      position: absolute; bottom: 120px;
+      max-width: 900px; text-align: center;
+      padding: 24px 40px; border-radius: 16px;
+      background: rgba(0,0,0,0.5); border: 1px solid rgba(22,163,74,0.3);
+      animation: fadeUp 1s ease 1.2s forwards; opacity: 0;
+    }
+    .voiceover p { font-size: 26px; font-style: italic; line-height: 1.5; color: rgba(255,255,255,0.9); }
+    .voice-bars {
+      display: flex; align-items: center; justify-content: center; gap: 4px;
+      margin-top: 16px; height: 24px;
+    }
+    .voice-bars span {
+      width: 4px; height: 100%; background: var(--green); border-radius: 2px;
+      animation: voiceBar 0.6s ease-in-out infinite;
+    }
+    .voice-bars span:nth-child(2) { animation-delay: 0.1s; }
+    .voice-bars span:nth-child(3) { animation-delay: 0.2s; }
+    .voice-bars span:nth-child(4) { animation-delay: 0.15s; }
+    .voice-bars span:nth-child(5) { animation-delay: 0.25s; }
+
+    .progress-bar {
+      position: absolute; bottom: 0; left: 0; height: 4px;
+      background: linear-gradient(90deg, var(--green), var(--green-bright));
+      width: 0%; transition: width 0.15s linear;
+    }
+    .scene-counter {
+      position: absolute; top: 40px; right: 48px;
+      font-size: 14px; letter-spacing: 0.12em; color: rgba(255,255,255,0.35);
+    }
+  </style>
+</head>
+<body>
+  <div class="stage" id="stage">
+    <div class="bg"></div>
+    <div class="bg-grid"></div>
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+    <div class="scene-counter" id="counter">01 / 07</div>
+
+    <!-- Scene 1: Phone powers on -->
+    <div class="scene active" id="scene-1">
+      <div class="phone-frame">
+        <div class="phone-screen">
+          <div class="phone-notch"></div>
+          <div class="boot-ring"></div>
+          <div class="boot-logo">
+            <img src="projecthub-logo.png" alt="" />
+          </div>
+        </div>
+      </div>
+      <p class="scene-label">Powering on</p>
+    </div>
+
+    <!-- Scene 2: Logo appears -->
+    <div class="scene" id="scene-2">
+      <div class="logo-hero">
+        <img src="projecthub-logo.png" alt="Hormuud ProjectHub" />
+      </div>
+      <p class="logo-tagline"><em>Connect</em> &nbsp;•&nbsp; <em>Collaborate</em> &nbsp;•&nbsp; <em>Create</em></p>
+    </div>
+
+    <!-- Scene 3: Students create projects -->
+    <div class="scene" id="scene-3">
+      <h2 class="scene-title">Students <span>create projects</span></h2>
+      <div class="ui-mock" id="student-mock">
+        <div class="ui-sidebar">
+          <img class="logo-sm" src="projecthub-logo.png" alt="" />
+          <div class="ui-nav-item active">Active Projects</div>
+          <div class="ui-nav-item">Team Members</div>
+          <div class="ui-nav-item">Calendar</div>
+          <div class="ui-nav-item">Messages</div>
+          <div class="ui-nav-item">File Upload</div>
+        </div>
+        <div class="ui-main">
+          <div class="ui-header">
+            <h2>My Projects</h2>
+            <span class="ui-badge">+ New Project</span>
+          </div>
+          <div class="ui-cards">
+            <div class="ui-card">
+              <h3>AI Campus Navigator</h3>
+              <p>Team of 4 · Due Mar 28</p>
+              <div class="ui-progress"><span style="width:72%"></span></div>
+            </div>
+            <div class="ui-card">
+              <h3>Smart Library System</h3>
+              <p>Team of 3 · Due Apr 5</p>
+              <div class="ui-progress"><span style="width:45%"></span></div>
+            </div>
+            <div class="ui-card">
+              <h3>Health Analytics Dashboard</h3>
+              <p>Team of 5 · Due Apr 12</p>
+              <div class="ui-progress"><span style="width:18%"></span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Scene 4: Teachers review -->
+    <div class="scene" id="scene-4">
+      <h2 class="scene-title">Teachers <span>review &amp; grade</span></h2>
+      <div class="review-stack" id="review-stack">
+        <div class="review-card">
+          <div class="review-avatar">AC</div>
+          <div class="review-meta">
+            <h3>AI Campus Navigator — Alex Chen</h3>
+            <p>Submitted 2 hours ago · CS401 Final Project</p>
+          </div>
+          <div class="review-actions">
+            <button class="btn-approve">Approve</button>
+            <button class="btn-reject">Review</button>
+          </div>
+        </div>
+        <div class="review-card">
+          <div class="review-avatar">SM</div>
+          <div class="review-meta">
+            <h3>Smart Library System — Sarah Miller</h3>
+            <p>Pending feedback · IT302 Group Project</p>
+          </div>
+          <div class="review-actions">
+            <button class="btn-approve">Approve</button>
+            <button class="btn-reject">Review</button>
+          </div>
+        </div>
+        <div class="review-card">
+          <div class="review-avatar">JK</div>
+          <div class="review-meta">
+            <h3>Health Analytics — James Kim</h3>
+            <p>Awaiting final submission · DS401</p>
+          </div>
+          <div class="review-actions">
+            <button class="btn-approve">Approve</button>
+            <button class="btn-reject">Review</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Scene 5: AI features -->
+    <div class="scene" id="scene-5">
+      <div class="ai-panel" id="ai-panel">
+        <div class="ai-header">
+          <div class="ai-icon">✨</div>
+          <div>
+            <h2>AI Project Assistant</h2>
+            <p>Real ChatGPT analysis for every submission</p>
+          </div>
+        </div>
+        <div class="ai-message">
+          <strong>Project summary:</strong> The student team is building a mobile campus navigation app using React Native and GPS beacons. Scope includes indoor mapping, event notifications, and accessibility routes.
+        </div>
+        <div class="ai-message">
+          <strong>What it should contain:</strong> User authentication, interactive map UI, beacon integration module, admin dashboard, and a technical documentation PDF.
+        </div>
+        <div class="ai-message">
+          <strong>Recommendation:</strong>
+          <span class="ai-rec">✓ Accept with minor revisions — missing accessibility documentation</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Scene 6: Statistics -->
+    <div class="scene" id="scene-6">
+      <h2 class="scene-title" style="top:180px">Trusted across <span>Hormuud University</span></h2>
+      <div class="stats-row" id="stats-row">
+        <div class="stat-block">
+          <div class="stat-num" data-target="500">0</div>
+          <div class="stat-label">Student Teams</div>
+        </div>
+        <div class="stat-block">
+          <div class="stat-num" data-target="1200">0</div>
+          <div class="stat-label">Projects</div>
+        </div>
+        <div class="stat-block">
+          <div class="stat-num" data-target="80">0</div>
+          <div class="stat-label">Teachers</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Scene 7: Final hero -->
+    <div class="scene" id="scene-7">
+      <div class="final-logo">
+        <img src="projecthub-logo.png" alt="Hormuud ProjectHub" />
+      </div>
+      <h2 class="final-headline">Build Academic Projects Together</h2>
+      <p class="final-tagline">Connect • Collaborate • Create</p>
+      <div class="voiceover">
+        <p>"Hormuud ProjectHub. Connecting students and teachers to build the future together."</p>
+        <div class="voice-bars">
+          <span></span><span></span><span></span><span></span><span></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="progress-bar" id="progress"></div>
+  </div>
+
+  <script>
+    const SCENES = [
+      { id: 'scene-1', duration: 6500, label: '01 / 07' },
+      { id: 'scene-2', duration: 6500, label: '02 / 07', onEnter: resetAnim },
+      { id: 'scene-3', duration: 7000, label: '03 / 07', onEnter: () => triggerMock('student-mock') },
+      { id: 'scene-4', duration: 7000, label: '04 / 07', onEnter: () => triggerReview() },
+      { id: 'scene-5', duration: 7000, label: '05 / 07', onEnter: () => triggerMock('ai-panel') },
+      { id: 'scene-6', duration: 6500, label: '06 / 07', onEnter: animateStats },
+      { id: 'scene-7', duration: 4500, label: '07 / 07' },
+    ];
+
+    const TOTAL = SCENES.reduce((s, x) => s + x.duration, 0);
+    let elapsed = 0;
+    const progress = document.getElementById('progress');
+    const counter = document.getElementById('counter');
+
+    function resetAnim() {
+      document.querySelectorAll('.ui-mock, .ai-panel, .review-card, .stat-block').forEach(el => {
+        el.style.animation = 'none';
+        void el.offsetWidth;
+        el.style.animation = '';
+      });
+    }
+
+    function triggerMock(id) {
+      const el = document.getElementById(id);
+      if (el) {
+        el.style.animation = 'none';
+        void el.offsetWidth;
+        el.style.animation = 'scaleIn 1s ease forwards';
+      }
+    }
+
+    function triggerReview() {
+      document.querySelectorAll('.review-card').forEach((el, i) => {
+        el.style.animation = 'none';
+        void el.offsetWidth;
+        el.style.animation = `fadeUp 0.6s ease ${0.2 + i * 0.25}s forwards`;
+      });
+    }
+
+    function animateStats() {
+      document.querySelectorAll('.stat-num').forEach(el => {
+        const target = +el.dataset.target;
+        const suffix = target >= 500 ? '+' : '';
+        let current = 0;
+        const step = Math.ceil(target / 40);
+        const timer = setInterval(() => {
+          current = Math.min(target, current + step);
+          el.textContent = current + (current >= target ? suffix : '');
+          if (current >= target) clearInterval(timer);
+        }, 40);
+      });
+    }
+
+    function showScene(index) {
+      document.querySelectorAll('.scene').forEach(s => s.classList.remove('active'));
+      const scene = SCENES[index];
+      document.getElementById(scene.id).classList.add('active');
+      counter.textContent = scene.label;
+      scene.onEnter?.();
+    }
+
+    async function run() {
+      for (let i = 0; i < SCENES.length; i++) {
+        showScene(i);
+        const d = SCENES[i].duration;
+        await new Promise(resolve => {
+          const tick = setInterval(() => {
+            elapsed += 50;
+            progress.style.width = `${Math.min(100, (elapsed / TOTAL) * 100)}%`;
+          }, 50);
+          setTimeout(() => { clearInterval(tick); resolve(); }, d);
+        });
+      }
+      window.__PROMO_COMPLETE__ = true;
+    }
+
+    run();
+  </script>
+</body>
+</html>

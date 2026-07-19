@@ -1,0 +1,77 @@
+================================================================================
+  HORMUUD PROJECTHUB — REAL APPLICATION (NOT A BROWSER WEBSITE)
+================================================================================
+
+Your project IS a real application. You have 3 ways to use it like WhatsApp,
+Word, or any installed app:
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. WINDOWS DESKTOP APP (.exe) — BEST FOR PC
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  On YOUR computer (local, uses SQL Server):
+    Double-click:  REAL_APP.bat
+    → Opens ProjectHub in its own window (no Chrome tabs, no address bar)
+
+  For EVERYONE (after cloud deploy on Render):
+    1. Double-click:  BUILD_REAL_APP.bat  (creates Hormuud ProjectHub.exe)
+    2. Double-click:  SET_APP_URL.bat     (paste your Render link)
+    3. Give students/teachers the .exe from the release\ folder
+    → They install/run like any Windows program
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+2. PHONE APP (Android / iPhone) — FREE, NO STORE NEEDED
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  After your site is on Render (or local network):
+
+  Android (Chrome):
+    1. Open your ProjectHub link in Chrome
+    2. Menu (⋮) → "Install app" or "Add to Home screen"
+    3. Icon appears on home screen — opens full screen like a real app
+
+  iPhone (Safari):
+    1. Open your link in Safari
+    2. Share button → "Add to Home Screen"
+    3. Tap the ProjectHub icon — works like an app
+
+  The homepage also shows an "Install ProjectHub as an app" banner.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+3. INTERNET FOR EVERYONE (24/7) — BACKEND IN THE CLOUD
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  The .exe and phone app connect to your cloud server.
+  Follow:  GO_LIVE_24_7.bat  (Render + Supabase — free)
+
+  Then:
+    • SET_APP_URL.bat  → point desktop .exe to cloud
+    • Share Render link OR give people the .exe
+    • Phone users: Install from browser (section 2)
+
+
+WHAT IS THE DIFFERENCE?
+━━━━━━━━━━━━━━━━━━━━━━━━
+
+  "Website"     = opening a link in Chrome with tabs and address bar
+  "Application" = own icon, own window, full screen, on desktop or phone
+
+  Same ProjectHub — same login, same features — just installed like real software.
+
+
+RECOMMENDED PATH FOR YOU
+━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Step 1:  GO_LIVE_24_7.bat        → put backend on internet (free)
+  Step 2:  BUILD_REAL_APP.bat      → create Hormuud ProjectHub.exe
+  Step 3:  SET_APP_URL.bat         → link .exe to your cloud URL
+  Step 4:  Share .exe + tell phone users to "Install app" from Chrome
+
+  Demo login (password ProjectHub123!):
+    Teacher: swilliams@hu.edu
+    Student: alex.chen@hu.edu
+
+================================================================================

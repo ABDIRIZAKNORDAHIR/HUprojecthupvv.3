@@ -1,0 +1,31 @@
+# Secrets — NEVER upload to GitHub
+.env
+.env.local
+.env.*.local
+RENDER_ENV_COPY.txt
+
+# Dependencies
+node_modules/
+server/node_modules/
+
+# Build output
+dist/
+release/
+
+# Logs & OS
+*.log
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Backups
+*.zip
+GITHUB_LOGIN_NOW.txt
+
+# Large design exports (keep locally, not on GitHub)
+design/photoshop-export/*.psd
+design/photoshop-export/*.psb
+design/photoshop-export/screens/

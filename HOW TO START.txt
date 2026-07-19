@@ -1,0 +1,49 @@
+================================================================================
+PROJECTHUB - HOW TO START (DATABASE + API + AI + FRONTEND)
+================================================================================
+
+BEST — one command in terminal (PowerShell or CMD):
+
+  cd "C:\Users\25261\Downloads\Design ProjectHub UI_UX"
+  npm start
+
+  OR double-click:
+
+  START_PROJECT.bat
+
+  OR in PowerShell:
+
+  .\Start-ProjectHub.ps1
+
+--------------------------------------------------------------------------------
+
+WHAT IT DOES:
+
+  1. Connects to MySQL database (localhost / ProjectHub)
+  2. Starts API + AI (Groq) + frontend on one port
+  3. Opens ProjectHub in an app window automatically
+
+LINKS (after start):
+
+  http://localhost:8080/
+  http://localhost:8080/student
+  http://localhost:8080/teacher
+  http://localhost:8080/admin
+
+DEMO PASSWORD: ProjectHub123!
+
+  Teacher:  swilliams@hu.edu
+  Student:  alex.chen@hu.edu
+  Admin:    admin@hu.edu
+
+--------------------------------------------------------------------------------
+
+DEVELOPER MODE (separate API + UI windows):
+
+  START_HERE.bat   →  API :3004  +  UI :5180
+
+CHECK EVERYTHING IS CONNECTED:
+
+  npm run health-check
+
+================================================================================

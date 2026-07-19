@@ -1,0 +1,7 @@
+ProjectHub — Private administrator access (do not share publicly)
+
+URL:      http://localhost:5180/admin
+Email:    admin@hu.edu
+Password: ProjectHub123!
+
+Only authorized staff should use this link. Students and teachers use the home page portals.

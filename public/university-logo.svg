@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" fill="none">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="120" y2="120">
+      <stop stop-color="#16A34A"/>
+      <stop offset="1" stop-color="#2E84B6"/>
+    </linearGradient>
+  </defs>
+  <rect width="120" height="120" rx="24" fill="url(#g)"/>
+  <text x="60" y="68" text-anchor="middle" fill="white" font-family="Georgia,serif" font-size="40" font-weight="bold">HU</text>
+  <text x="60" y="88" text-anchor="middle" fill="rgba(255,255,255,0.9)" font-family="Arial,sans-serif" font-size="8" font-weight="700" letter-spacing="1">HORMUUD</text>
+</svg>

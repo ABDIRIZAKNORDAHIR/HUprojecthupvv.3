@@ -1,0 +1,62 @@
+[
+  {
+    "ProjectId": 7,
+    "TeacherAssignedId": "PRJ-HU2024044-MQDQI7WF",
+    "Title": "A A",
+    "Abstract": "DAAA",
+    "Description": null,
+    "AssignedByTeacherId": 10,
+    "OwnerStudentId": 8,
+    "Status": "approved",
+    "AssignedAt": "2026-06-14T12:02:11.206Z",
+    "SubmittedAt": null,
+    "ReviewedAt": "2026-06-14T12:06:06.166Z",
+    "UpdatedAt": "2026-06-14T12:06:06.166Z",
+    "RejectionReason": null
+  },
+  {
+    "ProjectId": 8,
+    "TeacherAssignedId": "PRJ-CS-2026-001",
+    "Title": "AI-Powered Crop Yield Prediction",
+    "Abstract": "Machine learning system using satellite imagery and IoT sensors for crop yield prediction.",
+    "Description": null,
+    "AssignedByTeacherId": 11,
+    "OwnerStudentId": 15,
+    "Status": "assigned",
+    "AssignedAt": "2026-06-14T12:49:01.160Z",
+    "SubmittedAt": null,
+    "ReviewedAt": null,
+    "UpdatedAt": "2026-06-14T12:49:01.160Z",
+    "RejectionReason": null
+  },
+  {
+    "ProjectId": 10,
+    "TeacherAssignedId": "PRJ-CS-2026-003",
+    "Title": "Distributed Ledger for Logistics",
+    "Abstract": "Blockchain solution for logistics companies to track shipments in real-time.",
+    "Description": null,
+    "AssignedByTeacherId": 11,
+    "OwnerStudentId": 16,
+    "Status": "assigned",
+    "AssignedAt": "2026-06-14T12:49:01.188Z",
+    "SubmittedAt": null,
+    "ReviewedAt": null,
+    "UpdatedAt": "2026-06-14T12:49:01.188Z",
+    "RejectionReason": null
+  },
+  {
+    "ProjectId": 14,
+    "TeacherAssignedId": "PRJ-HU2024009-MQDTO0J0",
+    "Title": "AKL",
+    "Abstract": "SC",
+    "Description": "SC",
+    "AssignedByTeacherId": 19,
+    "OwnerStudentId": 20,
+    "Status": "approved",
+    "AssignedAt": "2026-06-14T13:30:40.431Z",
+    "SubmittedAt": null,
+    "ReviewedAt": "2026-06-14T13:34:11.389Z",
+    "UpdatedAt": "2026-06-14T13:34:11.389Z",
+    "RejectionReason": null
+  }
+]

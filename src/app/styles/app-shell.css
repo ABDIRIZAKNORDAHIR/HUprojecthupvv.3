@@ -1,0 +1,223 @@
+/* Logged-in application — Hormuud University brand shell */
+
+.app-shell {
+  --app-green: #16A34A;
+  --app-green-dark: #15803d;
+  --app-navy: #0F2D5C;
+  --app-green-glow: rgba(22, 128, 85, 0.2);
+  --app-green-soft: #f0fdf4;
+  position: relative;
+  min-height: 100vh;
+  background: var(--background);
+}
+
+.app-shell::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 3px;
+  width: var(--app-scroll-progress, 0%);
+  background: linear-gradient(90deg, var(--app-green), #4ade80);
+  z-index: 100;
+  transition: width 0.08s linear;
+}
+
+.app-shell-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.app-shell-bg-gradient {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(165deg, #f0fdf4 0%, #f8fafc 35%, #ffffff 70%, #ecfdf5 100%);
+}
+
+.app-shell-bg-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(22, 128, 85, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(22, 128, 85, 0.035) 1px, transparent 1px);
+  background-size: 40px 40px;
+  mask-image: radial-gradient(ellipse 90% 80% at 50% 0%, black 10%, transparent 70%);
+}
+
+.app-shell-bg-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+  opacity: 0.35;
+  animation: app-orb-float 18s ease-in-out infinite alternate;
+}
+
+.app-shell-bg-orb--1 {
+  width: 420px;
+  height: 420px;
+  background: rgba(22, 128, 85, 0.15);
+  top: -8%;
+  right: -5%;
+}
+
+.app-shell-bg-orb--2 {
+  width: 320px;
+  height: 320px;
+  background: rgba(37, 99, 235, 0.08);
+  bottom: 10%;
+  left: -5%;
+  animation-delay: -6s;
+}
+
+@keyframes app-orb-float {
+  0% { transform: translate(0, 0) scale(1); }
+  100% { transform: translate(-2%, 3%) scale(1.08); }
+}
+
+.app-shell-layout {
+  position: relative;
+  z-index: 1;
+}
+
+.app-sidebar {
+  background: rgba(255, 255, 255, 0.92) !important;
+  backdrop-filter: blur(20px) saturate(1.2);
+  -webkit-backdrop-filter: blur(20px) saturate(1.2);
+  border-right-color: color-mix(in srgb, var(--app-green) 12%, transparent) !important;
+}
+
+.app-sidebar-logo {
+  object-fit: contain;
+  object-position: left center;
+  flex-shrink: 0;
+}
+
+.brand-logo {
+  display: block;
+  object-fit: contain;
+  object-position: left center;
+  flex-shrink: 0;
+}
+
+.brand-logo--full {
+  height: 2.75rem;
+  width: auto;
+  max-width: 100%;
+}
+
+.brand-logo--icon {
+  width: 2.5rem;
+  height: 2.5rem;
+  object-fit: cover;
+  object-position: left center;
+  border-radius: 0.375rem;
+}
+
+.brand-logo--header {
+  height: 2rem;
+  width: auto;
+  max-width: 9rem;
+}
+
+.brand-logo--hero {
+  height: 3.25rem;
+  width: auto;
+  max-width: min(100%, 20rem);
+}
+
+.brand-logo--xl {
+  height: 4.5rem;
+  width: auto;
+  max-width: min(100%, 28rem);
+}
+
+@media (min-width: 640px) {
+  .brand-logo--xl {
+    height: 5.5rem;
+    max-width: min(100%, 32rem);
+  }
+}
+
+.brand-logo--loading {
+  height: 3.5rem;
+  width: auto;
+  max-width: min(100%, 18rem);
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.app-sidebar-brand-title {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 0.9375rem;
+  color: var(--app-green);
+  line-height: 1.2;
+}
+
+.app-sidebar-brand-sub {
+  font-size: 0.625rem;
+  font-weight: 700;
+  color: #000;
+  opacity: 0.65;
+  line-height: 1.2;
+}
+
+.app-header {
+  background: rgba(255, 255, 255, 0.88) !important;
+  backdrop-filter: blur(16px) saturate(1.2);
+  -webkit-backdrop-filter: blur(16px) saturate(1.2);
+  border-bottom-color: color-mix(in srgb, var(--app-green) 10%, transparent) !important;
+}
+
+.app-header--scrolled {
+  box-shadow: 0 4px 24px rgba(22, 128, 85, 0.06);
+}
+
+.app-search-btn {
+  border-color: color-mix(in srgb, var(--app-green) 15%, transparent) !important;
+  background: rgba(240, 253, 244, 0.6) !important;
+}
+
+.app-search-btn:hover {
+  background: rgba(240, 253, 244, 0.95) !important;
+  border-color: color-mix(in srgb, var(--app-green) 30%, transparent) !important;
+}
+
+.app-ai-tools-btn {
+  background: linear-gradient(135deg, var(--app-green), #2563EB) !important;
+  box-shadow: 0 4px 16px var(--app-green-glow);
+}
+
+.app-main-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(22, 128, 85, 0.2) transparent;
+}
+
+.app-mobile-nav {
+  background: rgba(255, 255, 255, 0.94) !important;
+  backdrop-filter: blur(20px);
+  border-top-color: color-mix(in srgb, var(--app-green) 12%, transparent) !important;
+}
+
+.app-card {
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(12px);
+  border: 1px solid color-mix(in srgb, var(--app-green) 10%, transparent);
+  border-radius: 1rem;
+  box-shadow: 0 4px 20px rgba(22, 128, 85, 0.04);
+  transition: box-shadow 0.25s ease, transform 0.25s ease;
+}
+
+.app-card:hover {
+  box-shadow: 0 8px 32px rgba(22, 128, 85, 0.08);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-shell-bg-orb {
+    animation: none;
+  }
+}

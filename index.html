@@ -1,0 +1,71 @@
+
+  <!DOCTYPE html>
+  <html lang="en">
+    <head>
+      <meta charset="UTF-8" />
+      <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+      <meta name="theme-color" content="#16A34A" />
+      <title>Hormuud ProjectHub — Hormuud University</title>
+      <meta name="description" content="Hormuud ProjectHub — Connect, Collaborate, Create. Official academic project management for Hormuud University." />
+      <link rel="icon" type="image/png" href="/projecthub-favicon.png" />
+      <link rel="apple-touch-icon" href="/pwa-192.png" />
+      <meta name="apple-mobile-web-app-capable" content="yes" />
+      <meta name="apple-mobile-web-app-title" content="Hormuud ProjectHub" />
+      <meta name="mobile-web-app-capable" content="yes" />
+      <style>
+        html, body { height: 100%; margin: 0; background: #f0fdf4; }
+        #root { min-height: 100%; }
+        #boot-fallback {
+          font-family: system-ui, sans-serif;
+          padding: 2rem;
+          text-align: center;
+          color: #16A34A;
+        }
+        #boot-error {
+          display: none;
+          font-family: system-ui, sans-serif;
+          padding: 2rem;
+          max-width: 520px;
+          margin: 2rem auto;
+          background: #fff;
+          border: 2px solid #dc2626;
+          border-radius: 12px;
+          color: #111;
+        }
+      </style>
+    </head>
+    <body>
+      <div id="root">
+        <div id="boot-fallback">
+          <img src="/projecthub-logo.png" alt="Hormuud ProjectHub" style="max-width:min(280px,90vw);height:auto;margin:0 auto 12px;display:block" />
+          <p>Loading…</p>
+        </div>
+      </div>
+      <div id="boot-error">
+        <h2>ProjectHub failed to load</h2>
+        <p>Close this tab, double-click <strong>START_HERE.bat</strong>, then press <strong>Ctrl+Shift+R</strong>.</p>
+        <pre id="boot-error-msg" style="font-size:12px;overflow:auto"></pre>
+      </div>
+      <script>
+        window.addEventListener('error', function (e) {
+          var box = document.getElementById('boot-error');
+          var msg = document.getElementById('boot-error-msg');
+          if (box) box.style.display = 'block';
+          if (msg) msg.textContent = (e.message || e) + '';
+        });
+        setTimeout(function () {
+          var root = document.getElementById('root');
+          var fb = document.getElementById('boot-fallback');
+          if (fb && root && root.contains(fb)) {
+            var box = document.getElementById('boot-error');
+            if (box) {
+              box.style.display = 'block';
+              document.getElementById('boot-error-msg').textContent =
+                'App did not start in 20s. Run START_HERE.bat and press Ctrl+Shift+R.';
+            }
+          }
+        }, 20000);
+      </script>
+      <script type="module" src="/src/main.tsx"></script>
+    </body>
+  </html>

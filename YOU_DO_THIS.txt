@@ -1,0 +1,55 @@
+================================================================================
+  ALMOST DONE — 3 CLICKS IN YOUR BROWSER (I did everything else)
+================================================================================
+
+I already did for you:
+  [x] Installed Git + GitHub CLI
+  [x] Prepared all code (git commit ready)
+  [x] Created RENDER_ENV_COPY.txt with your Groq AI key
+  [x] Built desktop app (.exe)
+  [x] Protected .env from upload (.gitignore)
+
+You must click these 3 things (I cannot log in as you):
+
+
+CLICK 1 — GitHub (2 minutes)
+────────────────────────────
+1. Double-click: DEPLOY_DO_IT.bat
+   OR run in terminal: gh auth login -w
+2. Browser opens → click Authorize GitHub
+3. Script uploads code to github.com/YOUR-USERNAME/hormuud-projecthub
+
+   If DEPLOY_DO_IT.bat fails, use GitHub Desktop:
+   - Add folder → Publish repository → name: hormuud-projecthub
+
+
+CLICK 2 — Supabase database (5 minutes)
+────────────────────────────────────────
+1. Browser: https://supabase.com/dashboard/project/new
+2. New project → name: projecthub → set password (write it down!)
+3. Settings → Database → Connection string → URI
+4. Copy URI, replace [YOUR-PASSWORD] with your password
+5. Paste into RENDER_ENV_COPY.txt on the DATABASE_URL= line
+
+
+CLICK 3 — Render hosting (5 minutes)
+────────────────────────────────────
+1. Browser: https://dashboard.render.com/blueprint/new
+2. Sign up with GitHub
+3. Select repo: hormuud-projecthub → Apply
+4. Open service → Environment tab
+5. Copy ALL lines from RENDER_ENV_COPY.txt → paste as env vars
+6. Save → wait until status LIVE (green)
+
+YOUR PERMANENT LINK:
+  https://hormuud-projecthub.onrender.com  (or similar on Render dashboard)
+
+Then run SET_APP_URL.bat and paste that link.
+
+
+LOGIN FOR EVERYONE:
+  Password: ProjectHub123!
+  Teacher: swilliams@hu.edu
+  Student: alex.chen@hu.edu
+
+================================================================================

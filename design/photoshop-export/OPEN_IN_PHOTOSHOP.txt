@@ -1,0 +1,37 @@
+HORMUUD PROJECTHUB — FULL PHOTOSHOP DESIGN EXPORT
+=================================================
+
+Generated from the live application (all screens captured at 2880px wide).
+
+WHERE TO OPEN
+-------------
+1. ALL SCREENS IN ONE FILE (recommended)
+   ProjectHub-Full-Design.psb
+   → Open in Adobe Photoshop (File → Open)
+   → Each screen is a separate layer, stacked vertically
+
+2. STANDARD PSD (if PSB does not open on your PC)
+   ProjectHub-Full-Design-Part1.psd
+   ProjectHub-Full-Design-Part2.psd
+   → Same design, split into two Photoshop files
+
+3. INDIVIDUAL SCREENS
+   screens\01-welcome-home.psd
+   screens\02-student-login.psd
+   ... (27 screens total)
+   → Student, Teacher, Admin, Login, Register, etc.
+
+FREE ALTERNATIVE
+----------------
+Upload any .psd file to https://www.photopea.com (works in browser)
+
+REGENERATE
+----------
+Double-click: EXPORT_FULL_PSD.bat (project root)
+Or run: npm run export:figma-screens && npm run export:photoshop
+(ProjectHub must be running on http://localhost:5180)
+
+BRAND
+-----
+Hormuud ProjectHub · Hormuud University
+Colors: Green #008037 · Navy #051C2C

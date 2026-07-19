@@ -1,0 +1,78 @@
+================================================================================
+  HORMUUD PROJECTHUB — GO LIVE ON THE INTERNET (100% FREE OPTIONS)
+================================================================================
+
+You have TWO ways to let anyone on the internet use your app without paying.
+
+
+OPTION A — FASTEST (share from your PC today)
+---------------------------------------------
+Best for: demos, classmates, teacher review, testing.
+
+1. Double-click:  SHARE_ON_INTERNET.bat
+2. Wait for the public link (looks like https://xxxx.trycloudflare.com)
+3. Send that link to anyone
+4. KEEP YOUR PC ON while they use it
+
+Uses your local SQL Server + free Groq AI. No credit card.
+
+If cloudflared is missing, the script tries to install it with winget.
+
+
+OPTION B — ALWAYS ONLINE (free cloud hosting)
+---------------------------------------------
+Best for: real university deployment, 24/7 access.
+
+Stack (all have free tiers):
+  • Render.com     — hosts your app (API + website together)
+  • Supabase.com   — free PostgreSQL database
+  • Groq           — free AI (you already have this)
+
+STEP 1 — Create free database (Supabase)
+  1. Go to https://supabase.com → Sign up (free)
+  2. New project → name: projecthub → choose region near you
+  3. Wait ~2 minutes for database to start
+  4. Settings → Database → Connection string → URI
+  5. Copy the URL (starts with postgresql://...)
+     Replace [YOUR-PASSWORD] with your database password
+
+STEP 2 — Push code to GitHub
+  1. Create a repo at https://github.com/new
+  2. Upload this project folder (or use GitHub Desktop)
+
+STEP 3 — Deploy on Render (free)
+  1. Go to https://render.com → Sign up (free)
+  2. New → Blueprint → connect your GitHub repo
+  3. Render reads render.yaml automatically
+  4. Add these secrets in Render dashboard:
+       DATABASE_URL = (paste Supabase connection string)
+       GROQ_API_KEY = (your Groq key from SETUP_FREE_AI.bat)
+  5. Deploy → wait ~5–10 minutes
+  6. Your live URL: https://hormuud-projecthub.onrender.com
+
+STEP 4 — Seed demo users (once)
+  In Render → Shell, run:
+    cd server && npm run seed
+
+  Demo logins (password: ProjectHub123!):
+    Teacher: swilliams@hu.edu
+    Student: alex.chen@hu.edu / HU0001001
+    Admin:   admin@hu.edu
+
+NOTES
+  • Free Render sleeps after 15 min idle — first visit may take ~30 sec to wake
+  • Supabase free: 500 MB database (enough for a university project)
+  • Groq AI stays free from the cloud
+  • Local SQL Server data is NOT copied automatically — run seed or migrate manually
+
+
+WHICH SHOULD YOU USE?
+  • Need it working in 5 minutes?     → OPTION A (SHARE_ON_INTERNET.bat)
+  • Need it online 24/7 for real use? → OPTION B (Render + Supabase)
+
+
+NEED HELP?
+  Run START HERE.bat for local use.
+  Run SETUP_FREE_AI.bat if AI is not configured.
+
+================================================================================

@@ -1,0 +1,68 @@
+ProjectHub — View on Phone (Mobile)
+===================================
+
+Your project ALREADY works on phones. Here is how YOU can see it,
+and how STUDENTS see it on their phones.
+
+OPTION 1 — Preview on your PC (no phone needed)
+------------------------------------------------
+1. Open http://localhost:5180/ in Chrome or Edge
+2. Press F12 (Developer Tools)
+3. Click the phone/tablet icon (Toggle device toolbar)
+4. Choose a device: iPhone 14, Samsung Galaxy, etc.
+5. Refresh the page
+
+You will see the mobile layout:
+- Stacked hero (photo + Hormuud University title)
+- Full-width Sign in buttons
+- Green Student / Teacher icons in top bar
+- Portal cards one under another
+- After login: bottom navigation bar (Home, Projects, Team…)
+
+OPTION 2 — Real phone (same Wi-Fi)
+----------------------------------
+1. Run START.bat on your PC (server must stay on)
+2. Find your PC IP: open CMD → ipconfig → IPv4 Address
+   Example: 192.168.1.105
+3. On the phone (same Wi-Fi), open Safari or Chrome:
+   http://192.168.1.105:5180/
+
+OPTION 3 — Install on phone like an app (PWA)
+---------------------------------------------
+1. Open the site on the phone (Option 2)
+2. iPhone: Share → Add to Home Screen
+3. Android Chrome: Menu → Install app / Add to Home screen
+4. ProjectHub opens full-screen like a native app
+
+WHAT USERS SEE ON PHONE
+-----------------------
+
+HOMEPAGE (not signed in)
+  - HU logo + ProjectHub header
+  - Student & Teacher icon buttons + Sign In
+  - Hero with campus photo and green branding
+  - Large “Sign in as Student / Teacher” buttons
+  - Portal cards (green student card, white teacher card)
+  - Scroll sections: workflow, features, footer
+
+STUDENT (after sign in)
+  - Top: logo + search (compact header)
+  - Dashboard with projects and progress
+  - Bottom bar: Home | Projects | Team | Atlas | Settings
+  - Floating + button for quick actions
+
+TEACHER / ADMIN
+  - Same bottom navigation (different menu items)
+  - AI Tools where applicable
+
+PHONE LINKS (replace YOUR_IP with your PC address)
+--------------------------------------------------
+  http://YOUR_IP:5180/
+  http://YOUR_IP:5180/student
+  http://YOUR_IP:5180/teacher
+
+NOTES
+-----
+- Use portrait mode (vertical) for best layout
+- SQL data is the same on phone and PC — one shared database
+- Phone users need your server PC running and same Wi-Fi

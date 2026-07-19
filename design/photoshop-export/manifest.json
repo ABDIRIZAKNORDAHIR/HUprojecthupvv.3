@@ -1,0 +1,19 @@
+{
+  "exportedAt": "2026-06-17T16:29:24.068Z",
+  "format": "Adobe Photoshop PSD",
+  "brand": "Hormuud ProjectHub",
+  "screenCount": 27,
+  "individualFiles": "design/photoshop-export/screens/*.psd",
+  "masterFile": "design/photoshop-export/ProjectHub-Full-Design.psb",
+  "masterPsdParts": [
+    "design/photoshop-export/ProjectHub-Full-Design-Part1.psd",
+    "design/photoshop-export/ProjectHub-Full-Design-Part2.psd",
+    "design/photoshop-export/ProjectHub-Full-Design-Part3.psd"
+  ],
+  "openIn": "Adobe Photoshop · Photopea (free)",
+  "howToOpen": [
+    "Open design/photoshop-export/screens/ for each screen as its own PSD",
+    "Open ProjectHub-Full-Design.psb for ALL screens in one file (recommended)",
+    "Or open ProjectHub-Full-Design-Part1.psd, Part2.psd, Part3.psd (standard PSD split)"
+  ]
+}

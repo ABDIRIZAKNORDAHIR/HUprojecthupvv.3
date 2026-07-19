@@ -1,0 +1,144 @@
+================================================================================
+  THE BEST WAY — PUT ALL OF PROJECTHUB ON THE INTERNET (FREE, 24/7)
+  Everyone in the world can open your link. Your PC can be OFF.
+================================================================================
+
+WHAT YOU WANT
+  • Full app online: homepage, student, teacher, admin, messages, AI — everything
+  • Anyone with the link can use it
+  • No monthly payment
+  • Works when your laptop is closed
+
+THE BEST FREE SOLUTION (use this — not the tunnel)
+  ┌─────────────────────────────────────────────────────────────┐
+  │  Supabase  =  cloud database (replaces your SQL Server)     │
+  │  Render    =  hosts your entire app 24/7                    │
+  │  Groq      =  free AI (you already have the key)             │
+  │  GitHub    =  stores your code so Render can deploy it        │
+  └─────────────────────────────────────────────────────────────┘
+
+Total cost: $0. Setup time: about 30–45 minutes (one time).
+
+Your live URL will look like:
+  https://hormuud-projecthub.onrender.com
+Share that link with students, teachers, and admin.
+
+
+================================================================================
+  STEP-BY-STEP (follow in order)
+================================================================================
+
+STEP 1 — Create free database (Supabase)                    ~10 min
+────────────────────────────────────────────────────────────
+1. Open: https://supabase.com
+2. Sign up (free — use Google or email)
+3. Click "New project"
+   • Name: projecthub
+   • Database password: choose a STRONG password — write it down!
+   • Region: pick closest to Somalia (e.g. Frankfurt or Mumbai)
+4. Wait until project status is green (~2 minutes)
+5. Go to: Project Settings (gear) → Database
+6. Under "Connection string" choose URI
+7. Copy the string. It looks like:
+     postgresql://postgres.xxxx:YOUR_PASSWORD@aws-0-eu-central-1.pooler.supabase.com:6543/postgres
+8. Replace [YOUR-PASSWORD] with the password you chose
+9. Save this string in Notepad — you need it in Step 4
+
+
+STEP 2 — Put your project on GitHub                         ~15 min
+────────────────────────────────────────────────────────────
+You need GitHub so Render can download and run your app.
+
+EASIEST (no commands):
+1. Install "GitHub Desktop": https://desktop.github.com
+2. Sign in with a free GitHub account (create at github.com if needed)
+3. In GitHub Desktop: File → Add local repository
+   → Choose folder: Design ProjectHub UI_UX
+4. If it asks to create a repo, click "Create repository"
+5. Summary: "Hormuud ProjectHub"
+6. Click "Publish repository"
+   • Uncheck "Keep this code private" if you want free Render (private also works)
+7. Click Publish — your code is now on the internet (private repo is OK)
+
+
+STEP 3 — Create free hosting (Render)                       ~5 min
+────────────────────────────────────────────────────────────
+1. Open: https://render.com
+2. Sign up (free — use GitHub login)
+3. Click "New +" → "Blueprint"
+4. Connect your GitHub account if asked
+5. Select the repository you published (ProjectHub)
+6. Render finds render.yaml automatically — click "Apply"
+7. BEFORE deploy finishes, click the service "hormuud-projecthub"
+8. Go to "Environment" tab and ADD these variables:
+
+   DATABASE_URL
+     = paste the Supabase connection string from Step 1
+
+   GROQ_API_KEY
+     = your Groq key (same one from SETUP_FREE_AI.bat / .env file)
+
+   (JWT_SECRET and others are set automatically by render.yaml)
+
+9. Click "Save Changes" — Render will redeploy
+10. Wait 5–10 minutes. Status should turn "Live" (green)
+
+
+STEP 4 — Open your live site!
+────────────────────────────────────────────────────────────
+1. On Render, copy your URL (top of dashboard):
+     https://hormuud-projecthub.onrender.com
+2. Open it in browser — you should see Hormuud ProjectHub homepage
+3. First visit after idle may take 30–60 seconds (free tier wakes up)
+
+Demo logins (password for all: ProjectHub123!):
+  Teacher: swilliams@hu.edu
+  Student: alex.chen@hu.edu  (University ID: HU0001001)
+  Admin:   admin@hu.edu
+
+Share the Render URL with everyone. They do NOT need your computer on.
+
+
+================================================================================
+  IMPORTANT NOTES
+================================================================================
+
+• SHARE_ON_INTERNET.bat is NOT for 24/7 — only while your PC is on.
+  For "everyone always" use Render + Supabase (this guide).
+
+• Free Render sleeps after ~15 minutes with no visitors.
+  First click after sleep = ~30 sec wait. Then it is fast.
+
+• Supabase free = 500 MB database — enough for a university project.
+
+• Groq AI stays free from the cloud — same key in Render env vars.
+
+• Your old SQL Server data on your PC is NOT copied automatically.
+  The cloud starts fresh with demo users (seed runs on deploy).
+  To move real data later, ask for help exporting/importing.
+
+• If deploy fails on Render, open "Logs" tab and check:
+  - DATABASE_URL correct? (password, no [YOUR-PASSWORD] placeholder)
+  - GROQ_API_KEY set?
+
+
+================================================================================
+  CHECKLIST (print this)
+================================================================================
+
+  [ ] Supabase project created
+  [ ] DATABASE_URL copied to Notepad
+  [ ] GitHub Desktop — code published
+  [ ] Render.com — Blueprint applied from GitHub
+  [ ] DATABASE_URL added in Render Environment
+  [ ] GROQ_API_KEY added in Render Environment
+  [ ] Deploy status = Live
+  [ ] Opened URL — homepage loads
+  [ ] Teacher login works
+  [ ] Shared link with class / university
+
+
+================================================================================
+  NEED HELP?
+  Open DEPLOY_TO_CLOUD.bat or ask in Cursor with a screenshot of Render Logs.
+================================================================================

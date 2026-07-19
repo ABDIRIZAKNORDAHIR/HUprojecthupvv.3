@@ -1,0 +1,38 @@
+================================================================================
+  PROJECTHUB IS RUNNING — YOUR LINKS (generated automatically)
+================================================================================
+
+LOCAL (this computer):
+  App + API:  http://localhost:8080/
+  Student:    http://localhost:8080/student
+  Teacher:    http://localhost:8080/teacher
+  Admin:      http://localhost:8080/admin
+
+INTERNET (share with anyone — PC must stay ON):
+  Public URL: https://cuddly-symbols-scream.loca.lt
+  (If link stops working, run SHARE_ON_INTERNET.bat again for a new link)
+
+DESKTOP APP (real Windows application):
+  Portable:  release\Hormuud-ProjectHub-1.0.0-Portable.exe  (81 MB — share this!)
+  Or:        REAL_APP.bat / OPEN_PROJECTHUB_APP.bat
+
+LOGINS (password: ProjectHub123!):
+  Teacher:  swilliams@hu.edu
+  Student:  alex.chen@hu.edu  (ID: HU0001001)
+  Admin:    admin@hu.edu
+
+AI: Groq (free) — ACTIVE
+
+WHAT WAS DONE:
+  [x] Database configured and seeded
+  [x] Production build created
+  [x] Server running on port 8080
+  [x] Public tunnel started
+  [x] Desktop app prepared
+
+FOR 24/7 (PC can be OFF):
+  Still need one-time signup (free):
+    GO_LIVE_24_7.bat → Supabase + GitHub + Render
+  Then SET_APP_URL.bat with your Render link
+
+================================================================================

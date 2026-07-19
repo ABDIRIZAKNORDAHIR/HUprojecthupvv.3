@@ -1,0 +1,11 @@
+{
+  "exportedAt": "2026-06-17T16:27:57.909Z",
+  "baseUrl": "http://localhost:5180",
+  "frameWidth": 1440,
+  "screenCount": 27,
+  "figmaImport": [
+    "Best: Figma plugin \"html.to.design\" → paste http://localhost:5180/ while app runs",
+    "Fast: Drag PNGs from this folder into Figma (1440px frames)",
+    "Tokens: Import design/figma-tokens.json via Tokens Studio plugin"
+  ]
+}

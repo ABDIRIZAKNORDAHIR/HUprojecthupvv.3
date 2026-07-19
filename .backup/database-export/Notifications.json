@@ -1,0 +1,112 @@
+[
+  {
+    "NotificationId": 3,
+    "UserId": 10,
+    "Title": "New Project Assignment Request",
+    "Message": "daacad nuur (HU2024044) assigned project \"A A\" to you. Review and approve or reject.",
+    "Type": "assignment_request",
+    "RelatedProjectId": 7,
+    "IsRead": false,
+    "CreatedAt": "2026-06-14T12:02:11.215Z"
+  },
+  {
+    "NotificationId": 4,
+    "UserId": 8,
+    "Title": "Project Accepted",
+    "Message": "Your teacher accepted your project \"A A\". You can now work on it and submit when ready.",
+    "Type": "assignment_accepted",
+    "RelatedProjectId": 7,
+    "IsRead": false,
+    "CreatedAt": "2026-06-14T12:05:47.742Z"
+  },
+  {
+    "NotificationId": 5,
+    "UserId": 8,
+    "Title": "Project Approved",
+    "Message": "Your project \"A A\" has been approved.",
+    "Type": "review_approved",
+    "RelatedProjectId": 7,
+    "IsRead": false,
+    "CreatedAt": "2026-06-14T12:06:06.182Z"
+  },
+  {
+    "NotificationId": 11,
+    "UserId": 1,
+    "Title": "New Account Registration",
+    "Message": "FAARAH JAAMAC (HU2024000) registered as student. Approve or reject this account.",
+    "Type": "account_pending",
+    "RelatedProjectId": null,
+    "IsRead": false,
+    "CreatedAt": "2026-06-14T12:52:54.719Z"
+  },
+  {
+    "NotificationId": 14,
+    "UserId": 1,
+    "Title": "New Account Registration",
+    "Message": "FAARAH JAAMAC (HU2024001) registered as teacher. Approve or reject this account.",
+    "Type": "account_pending",
+    "RelatedProjectId": null,
+    "IsRead": false,
+    "CreatedAt": "2026-06-14T12:58:01.488Z"
+  },
+  {
+    "NotificationId": 15,
+    "UserId": 19,
+    "Title": "Account Approved",
+    "Message": "Your ProjectHub account has been approved by the administrator. You can now sign in.",
+    "Type": "account_approved",
+    "RelatedProjectId": null,
+    "IsRead": false,
+    "CreatedAt": "2026-06-14T13:01:08.385Z"
+  },
+  {
+    "NotificationId": 19,
+    "UserId": 1,
+    "Title": "New Account Registration",
+    "Message": "FAARAH JAAMAC (HU2024009) registered as student. Approve or reject this account.",
+    "Type": "account_pending",
+    "RelatedProjectId": null,
+    "IsRead": false,
+    "CreatedAt": "2026-06-14T13:27:13.995Z"
+  },
+  {
+    "NotificationId": 20,
+    "UserId": 20,
+    "Title": "Account Approved",
+    "Message": "Your ProjectHub account has been approved by the administrator. You can now sign in.",
+    "Type": "account_approved",
+    "RelatedProjectId": null,
+    "IsRead": false,
+    "CreatedAt": "2026-06-14T13:28:49.191Z"
+  },
+  {
+    "NotificationId": 21,
+    "UserId": 19,
+    "Title": "New Project Assignment Request",
+    "Message": "FAARAH JAAMAC (HU2024009) assigned project \"AKL\" to you. Review and approve or reject.",
+    "Type": "assignment_request",
+    "RelatedProjectId": 14,
+    "IsRead": false,
+    "CreatedAt": "2026-06-14T13:30:40.460Z"
+  },
+  {
+    "NotificationId": 22,
+    "UserId": 20,
+    "Title": "Project Accepted",
+    "Message": "Your teacher accepted your project \"AKL\". You can now work on it and submit when ready.",
+    "Type": "assignment_accepted",
+    "RelatedProjectId": 14,
+    "IsRead": false,
+    "CreatedAt": "2026-06-14T13:34:06.212Z"
+  },
+  {
+    "NotificationId": 23,
+    "UserId": 20,
+    "Title": "Project Approved",
+    "Message": "Your project \"AKL\" has been approved.",
+    "Type": "review_approved",
+    "RelatedProjectId": 14,
+    "IsRead": false,
+    "CreatedAt": "2026-06-14T13:34:11.404Z"
+  }
+]
