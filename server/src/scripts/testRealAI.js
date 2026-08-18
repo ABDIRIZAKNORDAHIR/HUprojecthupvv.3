@@ -11,7 +11,7 @@ async function testGroq() {
   if (!apiKey) return { ok: false, skipped: true };
 
   const baseUrl = (process.env.GROQ_BASE_URL || 'https://api.groq.com/openai/v1').replace(/\/$/, '');
-  const model = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
+  const model = process.env.GROQ_MODEL || 'openai/gpt-oss-120b';
 
   const res = await fetch(`${baseUrl}/chat/completions`, {
     method: 'POST',
@@ -19,7 +19,8 @@ async function testGroq() {
     body: JSON.stringify({
       model,
       messages: [{ role: 'user', content: 'Reply with exactly: ProjectHub real AI is working.' }],
-      max_tokens: 20,
+      max_completion_tokens: 1024,
+      include_reasoning: false,
       temperature: 0,
     }),
     signal: AbortSignal.timeout(30000),
@@ -33,7 +34,11 @@ async function testGroq() {
   }
 
   const data = JSON.parse(text);
-  return { ok: true, provider: 'groq', model, reply: data.choices?.[0]?.message?.content?.trim() };
+  const reply = data.choices?.[0]?.message?.content?.trim() || '';
+  if (!reply) {
+    return { ok: false, provider: 'groq', error: `Empty Groq reply (finish: ${data.choices?.[0]?.finish_reason || 'unknown'})` };
+  }
+  return { ok: true, provider: 'groq', model, reply };
 }
 
 async function testOpenAI() {

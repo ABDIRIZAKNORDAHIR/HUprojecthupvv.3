@@ -1,4 +1,4 @@
-import { motion } from 'motion/react';
+import { motion, useReducedMotion } from 'motion/react';
 
 interface GlassCardProps {
   children: React.ReactNode;
@@ -9,12 +9,14 @@ interface GlassCardProps {
 }
 
 export function GlassCard({ children, className = '', hover = true, glow, delay = 0 }: GlassCardProps) {
+  const reducedMotion = useReducedMotion();
+
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
+      initial={reducedMotion ? undefined : { opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.45, delay }}
-      whileHover={hover ? { y: -4, scale: 1.01 } : undefined}
+      transition={{ duration: 0.45, delay: reducedMotion ? 0 : delay }}
+      whileHover={hover && !reducedMotion ? { y: -4, scale: 1.01 } : undefined}
       className={`relative rounded-2xl border border-white/20 backdrop-blur-xl bg-white/90 shadow-xl overflow-hidden ${className}`}
       style={glow ? { boxShadow: `0 8px 40px ${glow}` } : undefined}
     >

@@ -7,14 +7,6 @@ import {
 } from '../config/appImages';
 import { svgBarChart, svgPieChart, svgLineChart, excelBarCell, type ChartLineSeries } from './exportChartsSvg';
 
-function escCell(v: unknown): string {
-  const s = String(v ?? '');
-  if (s.includes(',') || s.includes('"') || s.includes('\n')) {
-    return `"${s.replace(/"/g, '""')}"`;
-  }
-  return s;
-}
-
 export interface ReportSection {
   sheetName: string;
   headers: string[];
@@ -101,7 +93,7 @@ export function exportMultiSheetExcel(
   const coverRows = [
     { style: 'BrandTitle', cells: [APP_BRAND_NAME] },
     { style: 'BrandSub', cells: [`${org} · Teacher Analytics Report`] },
-    { style: 'Meta', cells: [meta?.subtitle ?? 'Project review & AI statistics'] },
+    { style: 'Meta', cells: [meta?.subtitle ?? 'Project review & statistics'] },
     ...(teacher ? [{ style: 'Meta', cells: [`Prepared for: ${teacher}`] }] : []),
     { style: 'Meta', cells: [`Generated: ${generated}`] },
     { style: 'Meta', cells: [''] },

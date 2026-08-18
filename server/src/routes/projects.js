@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { query } from '../db.js';
+import { sendError } from '../utils/httpError.js';
 import { authMiddleware, attachUserDetails, requireRole } from '../middleware/auth.js';
 import { analyzeSubmission } from '../services/athena.js';
 import { runProjectAIAnalysis, ensureProjectsHaveAIAnalysis } from '../services/projectAIService.js';
@@ -41,7 +42,8 @@ router.get('/', async (req, res) => {
       q = `
         SELECT DISTINCT p.ProjectId, p.TeacherAssignedId, p.Title, p.Abstract, p.Status,
                p.AssignedAt, p.SubmittedAt, p.UpdatedAt,
-               t.FirstName + ' ' + t.LastName AS TeacherName, t.UniversityId AS TeacherUniversityId
+               t.FirstName + ' ' + t.LastName AS TeacherName, t.UniversityId AS TeacherUniversityId,
+               t.ProfileImageUrl AS TeacherProfileImageUrl
         FROM Projects p
         JOIN Users t ON p.AssignedByTeacherId = t.UserId
         WHERE p.OwnerStudentId = @userId
@@ -56,7 +58,7 @@ router.get('/', async (req, res) => {
     const result = await query(q, params);
     res.json({ projects: result.recordset });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, err);
   }
 });
 
@@ -110,7 +112,7 @@ router.post('/', requireRole('teacher', 'admin'), async (req, res) => {
     if (err.message?.includes('UQ_Projects')) {
       return res.status(409).json({ error: 'Project ID already exists. Use a unique teacher-assigned ID.' });
     }
-    res.status(500).json({ error: err.message });
+    sendError(res, err);
   }
 });
 
@@ -128,6 +130,7 @@ router.get('/queue/review', requireRole('teacher', 'admin'), async (req, res) =>
   try {
     let q = `
       SELECT p.ProjectId, p.TeacherAssignedId, p.Title, p.Abstract, p.Status, p.SubmittedAt,
+             s.UserId AS OwnerStudentId, s.ProfileImageUrl AS StudentProfileImageUrl,
              s.FirstName + ' ' + s.LastName AS StudentName, s.UniversityId AS StudentUniversityId,
              sub.SubmissionId, sub.SubmittedAt AS SubmissionTime,
              ai.UniquenessScore, ai.AIConfidence, ai.SimilarProjectAssignedId, ai.SimilarityPercent,
@@ -152,7 +155,7 @@ router.get('/queue/review', requireRole('teacher', 'admin'), async (req, res) =>
     ensureProjectsHaveAIAnalysis(result.recordset.map(r => r.ProjectId)).catch(() => {});
     res.json({ queue: result.recordset });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, err);
   }
 });
 
@@ -161,7 +164,9 @@ router.get('/submissions/list', requireRole('teacher', 'admin'), async (req, res
   try {
     let q = `
       SELECT p.ProjectId, p.TeacherAssignedId, p.Title, p.Abstract, p.Status, p.AssignedAt, p.SubmittedAt,
+             s.UserId AS OwnerStudentId, s.ProfileImageUrl AS StudentProfileImageUrl,
              s.FirstName + ' ' + s.LastName AS StudentName, s.UniversityId AS StudentUniversityId,
+             s.Department, s.ClassName, s.StudyMode,
              sub.SubmissionId, sub.SubmittedAt AS SubmissionTime,
              ai.UniquenessScore, ai.AIConfidence, ai.SimilarProjectAssignedId, ai.SimilarityPercent,
              ai.AISuggestion, ai.SuggestedAction, ai.RejectionReasons,
@@ -185,7 +190,7 @@ router.get('/submissions/list', requireRole('teacher', 'admin'), async (req, res
     ensureProjectsHaveAIAnalysis(result.recordset.map(r => r.ProjectId)).catch(() => {});
     res.json({ submissions: result.recordset });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, err);
   }
 });
 
@@ -213,7 +218,7 @@ router.get('/stats/summary', authMiddleware, attachUserDetails, async (req, res)
 
     res.json({ pendingReview, collisions });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, err);
   }
 });
 
@@ -254,7 +259,7 @@ router.get('/search/query', async (req, res) => {
     const projects = await query(projectSql, projectParams);
 
     const people = await query(
-      `SELECT TOP 15 UserId, UniversityId, Email, FirstName, LastName, Role, Department
+      `SELECT TOP 15 UserId, UniversityId, Email, FirstName, LastName, Role, Department, ProfileImageUrl
        FROM Users WHERE IsActive = 1 AND AccountStatus = 'approved' AND (
          FirstName LIKE @like OR LastName LIKE @like OR Email LIKE @like
          OR UniversityId LIKE @idLike OR (FirstName + ' ' + LastName) LIKE @like
@@ -267,7 +272,7 @@ router.get('/search/query', async (req, res) => {
 
     res.json({ projects: projects.recordset, people: people.recordset });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, err);
   }
 });
 
@@ -300,7 +305,7 @@ router.get('/:id', async (req, res) => {
     }
 
     const members = await query(
-      `SELECT u.UserId, u.UniversityId, u.Email, u.FirstName, u.LastName, pm.JoinedAt
+      `SELECT u.UserId, u.UniversityId, u.Email, u.FirstName, u.LastName, u.ProfileImageUrl, pm.JoinedAt
        FROM ProjectMembers pm JOIN Users u ON pm.StudentId = u.UserId
        WHERE pm.ProjectId = @projectId`,
       { projectId }
@@ -327,7 +332,7 @@ router.get('/:id', async (req, res) => {
       aiAnalysis: role === 'student' ? null : aiAnalysis,
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, err);
   }
 });
 
@@ -342,22 +347,38 @@ router.put('/:id', requireRole('student'), async (req, res) => {
     }
 
     const editCheck = await query(
-      `SELECT p.Status FROM Projects p WHERE p.ProjectId = @projectId`,
+      `SELECT p.Status, p.SubmittedAt FROM Projects p WHERE p.ProjectId = @projectId`,
       { projectId }
     );
     if (!['assigned', 'changes_requested'].includes(editCheck.recordset[0]?.Status)) {
       return res.status(403).json({ error: 'Cannot edit this project' });
     }
 
+    const previous = editCheck.recordset[0];
+    // Proposal-stage change requests (never submitted) return to the teacher request queue.
+    const returnToRequestQueue = previous.Status === 'changes_requested' && !previous.SubmittedAt;
     const result = await query(
       `UPDATE Projects SET Title = COALESCE(@title, Title), Abstract = COALESCE(@abstract, Abstract),
-       Description = COALESCE(@description, Description), UpdatedAt = SYSUTCDATETIME()
+       Description = COALESCE(@description, Description),
+       Status = CASE WHEN @returnQueue = 1 THEN 'pending_teacher' ELSE Status END,
+       RejectionReason = CASE WHEN @returnQueue = 1 THEN NULL ELSE RejectionReason END,
+       UpdatedAt = SYSUTCDATETIME()
        OUTPUT INSERTED.* WHERE ProjectId = @projectId`,
-      { projectId, title: title || null, abstract: abstract || null, description: description || null }
+      {
+        projectId,
+        title: title || null,
+        abstract: abstract || null,
+        description: description || null,
+        returnQueue: returnToRequestQueue ? 1 : 0,
+      }
     );
+    if (returnToRequestQueue) {
+      const { ensureProjectsHaveAIAnalysis } = await import('../services/projectAIService.js');
+      ensureProjectsHaveAIAnalysis([projectId]).catch(() => {});
+    }
     res.json({ project: result.recordset[0] });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, err);
   }
 });
 
@@ -394,14 +415,47 @@ router.post('/:id/submit', requireRole('student'), async (req, res) => {
 
     // Run Athena AI analysis automatically on submit
     const allProjects = await query(
-      `SELECT ProjectId, TeacherAssignedId, Title, Abstract, Status FROM Projects WHERE ProjectId != @projectId`,
+      `SELECT p.ProjectId, p.TeacherAssignedId, p.Title, p.Abstract, p.Status,
+              p.OwnerStudentId, p.AssignedAt, p.SubmittedAt,
+              s.FirstName + ' ' + s.LastName AS StudentName,
+              s.UniversityId AS StudentUniversityId,
+              s.Department, s.ClassName, s.StudyMode, s.ProfileImageUrl
+       FROM Projects p
+       LEFT JOIN Users s ON p.OwnerStudentId = s.UserId
+       WHERE p.ProjectId != @projectId`,
       { projectId }
     );
     const settings = await query(`SELECT SettingValue FROM Settings WHERE SettingKey = 'ai_similarity_threshold'`);
     const threshold = parseInt(settings.recordset[0]?.SettingValue || '60', 10);
 
+    const current = await query(
+      `SELECT p.ProjectId, p.TeacherAssignedId, p.AssignedAt, p.SubmittedAt, p.Status, p.OwnerStudentId,
+              s.FirstName + ' ' + s.LastName AS StudentName,
+              s.UniversityId AS StudentUniversityId,
+              s.Department, s.ClassName, s.StudyMode, s.ProfileImageUrl
+       FROM Projects p
+       LEFT JOIN Users s ON p.OwnerStudentId = s.UserId
+       WHERE p.ProjectId = @projectId`,
+      { projectId }
+    );
+    const me = current.recordset[0] || {};
     const analysis = analyzeSubmission(
-      { title, abstract, projectId },
+      {
+        title,
+        abstract,
+        projectId,
+        assignedAt: me.AssignedAt,
+        submittedAt: me.SubmittedAt,
+        teacherAssignedId: me.TeacherAssignedId,
+        ownerStudentId: me.OwnerStudentId,
+        studentName: me.StudentName,
+        universityId: me.StudentUniversityId,
+        department: me.Department,
+        className: me.ClassName,
+        studyMode: me.StudyMode,
+        photo: me.ProfileImageUrl,
+        status: me.Status,
+      },
       allProjects.recordset,
       threshold
     );
@@ -439,7 +493,7 @@ router.post('/:id/submit', requireRole('student'), async (req, res) => {
       message: 'Project submitted successfully. Your teacher will review it and share feedback with you.',
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, err);
   }
 });
 
@@ -477,7 +531,7 @@ router.post('/:id/invite', requireRole('student'), async (req, res) => {
 
     res.json({ message: `Invitation sent to ${invited.FirstName} ${invited.LastName} (${invited.UniversityId})`, invited });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, err);
   }
 });
 
@@ -505,7 +559,7 @@ router.post('/:id/accept-invite', requireRole('student'), async (req, res) => {
 
     res.json({ message: 'You joined the shared project' });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, err);
   }
 });
 
@@ -520,6 +574,9 @@ router.post('/:id/review', requireRole('teacher', 'admin'), async (req, res) => 
     if (action === 'rejected' && !rejectionReason?.trim()) {
       return res.status(400).json({ error: 'Rejection description is required — explain why the project was rejected' });
     }
+    if (action === 'changes_requested' && !message?.trim()) {
+      return res.status(400).json({ error: 'A comment is required — tell the student what must be changed' });
+    }
 
     const project = await query(`SELECT p.* FROM Projects p WHERE p.ProjectId = @projectId`, { projectId });
     if (!project.recordset.length) return res.status(404).json({ error: 'Project not found' });
@@ -529,7 +586,11 @@ router.post('/:id/review', requireRole('teacher', 'admin'), async (req, res) => 
       return res.status(403).json({ error: 'Not your project' });
     }
 
-    const reason = action === 'rejected' ? rejectionReason.trim() : null;
+    const reason = action === 'rejected'
+      ? rejectionReason.trim()
+      : action === 'changes_requested'
+        ? message.trim()
+        : null;
     await query(
       `UPDATE Projects SET Status = @status, RejectionReason = @reason, ReviewedAt = SYSUTCDATETIME(), UpdatedAt = SYSUTCDATETIME()
        WHERE ProjectId = @projectId`,
@@ -561,7 +622,7 @@ router.post('/:id/review', requireRole('teacher', 'admin'), async (req, res) => 
 
     res.json({ message: `Project ${action}`, status: action });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, err);
   }
 });
 

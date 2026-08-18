@@ -1,7 +1,4 @@
-/**
- * Stop processes listening on given ports (Windows).
- * Usage: node scripts/stop-services.mjs [3004] [5180] [5181]
- */
+
 import { execSync } from 'child_process';
 
 const ports = process.argv.slice(2).map(Number).filter(Boolean);

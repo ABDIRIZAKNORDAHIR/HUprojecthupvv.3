@@ -21,12 +21,24 @@ const TABLES = [
   'AIAnalyses',
   'Messages',
   'Notifications',
+  'Conversations',
+  'ConversationMembers',
+  'ConversationMessages',
+  'ProjectEvaluations',
+  'DocumentAnalyses',
+  'ProjectAIChatMessages',
+  'ClassAssignments',
+  'ClassAssignmentSubmissions',
+  'PushSubscriptions',
+  'EmailOtps',
+  'AuthActionTokens',
+  'AuditLogs',
 ];
 
-const SENSITIVE = ['PasswordHash'];
+const SENSITIVE = ['PasswordHash', 'PlainPassword', 'CodeHash', 'PayloadJson', 'P256dh', 'Auth'];
 
 async function exportTable(name) {
-  const result = await query(`SELECT * FROM dbo.[${name}]`);
+  const result = await query(`SELECT * FROM ${name}`);
   const rows = result.recordset.map(row => {
     const copy = { ...row };
     for (const key of SENSITIVE) {

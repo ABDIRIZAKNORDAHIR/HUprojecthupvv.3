@@ -1,7 +1,4 @@
-/**
- * Full stack start: MySQL DB + API + AI + frontend → opens app
- * Usage: npm start   OR   node scripts/start-full-stack.mjs
- */
+
 import { spawn, execSync } from 'child_process';
 import path from 'path';
 import { fileURLToPath } from 'url';

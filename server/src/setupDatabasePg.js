@@ -3,6 +3,7 @@ import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { query, getPool } from './db.js';
+import { getAdminBootstrap } from './config/security.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
@@ -17,7 +18,7 @@ CREATE TABLE IF NOT EXISTS Users (
   LastName VARCHAR(100) NOT NULL,
   Role VARCHAR(20) NOT NULL CHECK (Role IN ('student','teacher','admin')),
   Department VARCHAR(100),
-  IsActive BOOLEAN NOT NULL DEFAULT TRUE,
+  IsActive SMALLINT NOT NULL DEFAULT 1,
   CreatedAt TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UpdatedAt TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   LastLoginAt TIMESTAMPTZ,
@@ -25,11 +26,47 @@ CREATE TABLE IF NOT EXISTS Users (
   Specialty VARCHAR(100),
   ProfileImageUrl TEXT,
   AccountStatus VARCHAR(20) NOT NULL DEFAULT 'approved',
-  PlainPassword VARCHAR(255),
   Phone VARCHAR(30),
   Bio TEXT,
-  ContactInfo VARCHAR(500)
+  ContactInfo VARCHAR(500),
+  ClassName VARCHAR(50),
+  StudyMode VARCHAR(20)
 );
+
+CREATE TABLE IF NOT EXISTS EmailOtps (
+  OtpId SERIAL PRIMARY KEY,
+  Email VARCHAR(255) NOT NULL,
+  Purpose VARCHAR(40) NOT NULL,
+  CodeHash VARCHAR(255) NOT NULL,
+  PayloadJson TEXT,
+  ExpiresAt TIMESTAMPTZ NOT NULL,
+  Attempts INT NOT NULL DEFAULT 0,
+  ConsumedAt TIMESTAMPTZ,
+  CreatedAt TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS IX_EmailOtps_EmailPurpose
+  ON EmailOtps (Email, Purpose);
+
+CREATE TABLE IF NOT EXISTS AuthActionTokens (
+  Jti VARCHAR(64) PRIMARY KEY,
+  Purpose VARCHAR(40) NOT NULL,
+  ConsumedAt TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS AuditLogs (
+  AuditLogId BIGSERIAL PRIMARY KEY,
+  ActorUserId INT,
+  Action VARCHAR(80) NOT NULL,
+  EntityType VARCHAR(80),
+  EntityId VARCHAR(80),
+  MetadataJson TEXT,
+  IpAddress VARCHAR(64),
+  CreatedAt TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS IX_AuditLogs_CreatedAt ON AuditLogs (CreatedAt);
+CREATE INDEX IF NOT EXISTS IX_AuditLogs_Actor ON AuditLogs (ActorUserId);
 
 CREATE TABLE IF NOT EXISTS Settings (
   SettingKey VARCHAR(100) PRIMARY KEY,
@@ -111,7 +148,7 @@ CREATE TABLE IF NOT EXISTS Messages (
   ReceiverId INT NOT NULL,
   Content TEXT NOT NULL,
   SentAt TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  IsRead BOOLEAN NOT NULL DEFAULT FALSE,
+  IsRead SMALLINT NOT NULL DEFAULT 0,
   AttachmentType VARCHAR(20),
   AttachmentName VARCHAR(255),
   AttachmentData TEXT,
@@ -125,7 +162,7 @@ CREATE TABLE IF NOT EXISTS Notifications (
   Message TEXT NOT NULL,
   Type VARCHAR(50) NOT NULL DEFAULT 'info',
   RelatedProjectId INT,
-  IsRead BOOLEAN NOT NULL DEFAULT FALSE,
+  IsRead SMALLINT NOT NULL DEFAULT 0,
   CreatedAt TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -135,7 +172,7 @@ CREATE TABLE IF NOT EXISTS Conversations (
   ProjectId INT REFERENCES Projects(ProjectId) ON DELETE CASCADE,
   Title VARCHAR(200),
   CreatedBy INT NOT NULL REFERENCES Users(UserId),
-  IsArchived BOOLEAN NOT NULL DEFAULT FALSE,
+  IsArchived SMALLINT NOT NULL DEFAULT 0,
   CreatedAt TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UpdatedAt TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -157,7 +194,7 @@ CREATE TABLE IF NOT EXISTS ConversationMessages (
   AttachmentName VARCHAR(255),
   AttachmentData TEXT,
   SentAt TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  IsRead BOOLEAN NOT NULL DEFAULT FALSE
+  IsRead SMALLINT NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS ProjectEvaluations (
@@ -183,7 +220,7 @@ CREATE TABLE IF NOT EXISTS DocumentAnalyses (
   KeyPoints TEXT,
   Objectives TEXT,
   QualityScore DECIMAL(5,2),
-  RelatedToProject BOOLEAN NOT NULL DEFAULT FALSE,
+  RelatedToProject SMALLINT NOT NULL DEFAULT 0,
   GrammarIssues TEXT,
   MissingSections TEXT,
   PlagiarismNote TEXT,
@@ -200,6 +237,49 @@ CREATE TABLE IF NOT EXISTS ProjectAIChatMessages (
   Content TEXT NOT NULL,
   CreatedAt TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+CREATE TABLE IF NOT EXISTS ClassAssignments (
+  AssignmentId SERIAL PRIMARY KEY,
+  TeacherId INT NOT NULL,
+  ClassName VARCHAR(50) NOT NULL,
+  StudyMode VARCHAR(20),
+  Title VARCHAR(500) NOT NULL,
+  Instructions TEXT,
+  OpensAt TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  DeadlineAt TIMESTAMPTZ NOT NULL,
+  CreatedAt TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  IsClosed SMALLINT NOT NULL DEFAULT 0,
+  ClosedNotified SMALLINT NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS ClassAssignmentSubmissions (
+  SubmissionId SERIAL PRIMARY KEY,
+  AssignmentId INT NOT NULL,
+  StudentId INT NOT NULL,
+  Content TEXT NOT NULL,
+  AttachmentName VARCHAR(255),
+  AttachmentData TEXT,
+  Score NUMERIC(5,2),
+  BonusPoints NUMERIC(5,2) NOT NULL DEFAULT 0,
+  TeacherFeedback TEXT,
+  GradedAt TIMESTAMPTZ,
+  GradedBy INT,
+  SubmittedAt TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (AssignmentId, StudentId)
+);
+
+CREATE TABLE IF NOT EXISTS PushSubscriptions (
+  SubscriptionId SERIAL PRIMARY KEY,
+  UserId INT NOT NULL,
+  Endpoint VARCHAR(500) NOT NULL UNIQUE,
+  P256dh VARCHAR(255) NOT NULL,
+  Auth VARCHAR(255) NOT NULL,
+  UserAgent VARCHAR(255),
+  CreatedAt TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS IX_Push_UserId
+  ON PushSubscriptions (UserId);
 `;
 
 async function runSetupPg() {
@@ -209,6 +289,59 @@ async function runSetupPg() {
   for (const stmt of SCHEMA.split(';').map(s => s.trim()).filter(Boolean)) {
     await query(stmt);
   }
+
+  const legacyBooleanColumns = [
+    ['Users', 'IsActive'],
+    ['Messages', 'IsRead'],
+    ['Notifications', 'IsRead'],
+    ['Conversations', 'IsArchived'],
+    ['ConversationMessages', 'IsRead'],
+    ['DocumentAnalyses', 'RelatedToProject'],
+    ['ClassAssignments', 'IsClosed'],
+    ['ClassAssignments', 'ClosedNotified'],
+  ];
+  for (const [table, column] of legacyBooleanColumns) {
+    const type = await query(
+      `SELECT data_type FROM information_schema.columns
+       WHERE table_schema = 'public' AND LOWER(table_name) = LOWER(@table)
+         AND LOWER(column_name) = LOWER(@column)`,
+      { table, column }
+    );
+    if (type.recordset[0]?.data_type === 'boolean') {
+      await query(
+        `ALTER TABLE ${table} ALTER COLUMN ${column} DROP DEFAULT`
+      );
+      await query(
+        `ALTER TABLE ${table} ALTER COLUMN ${column} TYPE SMALLINT
+         USING (CASE WHEN ${column} THEN 1 ELSE 0 END)`
+      );
+      await query(
+        `ALTER TABLE ${table} ALTER COLUMN ${column} SET DEFAULT ${table === 'Users' && column === 'IsActive' ? 1 : 0}`
+      );
+    }
+  }
+
+  // Invalidate accounts whose recoverable password was exposed, then remove it.
+  const legacyPasswordColumn = await query(
+    `SELECT data_type FROM information_schema.columns
+     WHERE table_schema = 'public' AND LOWER(table_name) = 'users'
+       AND LOWER(column_name) = 'plainpassword'`
+  );
+  if (legacyPasswordColumn.recordset.length) {
+    await query(
+      `UPDATE Users SET PasswordHash = '!RESET_REQUIRED!'
+       WHERE PlainPassword IS NOT NULL AND PlainPassword <> ''`
+    );
+    await query('ALTER TABLE Users DROP COLUMN PlainPassword');
+    console.warn('[Security] Removed legacy plaintext passwords; affected users must use password reset');
+  }
+  await query('ALTER TABLE Users ADD COLUMN IF NOT EXISTS ClassName VARCHAR(50)');
+  await query('ALTER TABLE Users ADD COLUMN IF NOT EXISTS StudyMode VARCHAR(20)');
+  await query('ALTER TABLE ClassAssignmentSubmissions ADD COLUMN IF NOT EXISTS Score NUMERIC(5,2)');
+  await query('ALTER TABLE ClassAssignmentSubmissions ADD COLUMN IF NOT EXISTS BonusPoints NUMERIC(5,2) NOT NULL DEFAULT 0');
+  await query('ALTER TABLE ClassAssignmentSubmissions ADD COLUMN IF NOT EXISTS TeacherFeedback TEXT');
+  await query('ALTER TABLE ClassAssignmentSubmissions ADD COLUMN IF NOT EXISTS GradedAt TIMESTAMPTZ');
+  await query('ALTER TABLE ClassAssignmentSubmissions ADD COLUMN IF NOT EXISTS GradedBy INT');
 
   await query(`
     DELETE FROM ConversationMembers cm
@@ -239,19 +372,20 @@ async function runSetupPg() {
 
   const adminCheck = await query(`SELECT COUNT(*) AS c FROM Users WHERE Role = 'admin'`);
   if (Number(adminCheck.recordset[0].c) === 0) {
-    const hash = await bcrypt.hash(process.env.ADMIN_DEFAULT_PASSWORD || 'ProjectHub123!', 12);
+    const admin = getAdminBootstrap();
+    const hash = await bcrypt.hash(admin.password, 12);
     await query(
       `INSERT INTO Users (UniversityId, Email, PasswordHash, FirstName, LastName, Role, Department)
        VALUES (@uid, @email, @hash, @fn, @ln, 'admin', 'Administration')`,
       {
-        uid: process.env.ADMIN_UNIVERSITY_ID || 'HU0009000',
-        email: process.env.ADMIN_EMAIL || 'admin@hu.edu',
+        uid: admin.universityId,
+        email: admin.email,
         hash,
-        fn: process.env.ADMIN_FIRST_NAME || 'System',
-        ln: process.env.ADMIN_LAST_NAME || 'Administrator',
+        fn: admin.firstName,
+        ln: admin.lastName,
       }
     );
-    console.log('[DB Setup] Created admin account:', process.env.ADMIN_UNIVERSITY_ID || 'HU0009000');
+    console.log('[DB Setup] Created admin account:', admin.universityId);
   }
 
   console.log('[DB Setup] PostgreSQL database ready');

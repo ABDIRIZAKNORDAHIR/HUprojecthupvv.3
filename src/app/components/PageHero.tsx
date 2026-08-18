@@ -1,67 +1,97 @@
-import { motion } from 'motion/react';
-import { APP_IMAGES, getImageByUrl } from '../config/appImages';
-import { APP_HERO_GRADIENT } from '../config/brandTheme';
+import { motion, useReducedMotion } from 'motion/react';
+import { HU_IMAGES, getImageByUrl } from '../config/appImages';
+import { APP_HERO_GRADIENT, roleActiveGradient } from '../config/brandTheme';
 import { ImageCaption } from './ImageCaption';
+import { useAuth } from '../context/AuthContext';
 
 interface PageHeroProps {
   title: string;
   subtitle?: string;
   image?: string;
   gradient?: string;
+  /** Right-hand slot for page actions, counters, or status panels. */
   children?: React.ReactNode;
-  badge?: string;
+  /** Small label above the title, e.g. "Academic review". */
+  eyebrow?: string;
+  /** Icon rendered in the eyebrow chip. */
+  icon?: React.ComponentType<{ size?: number }>;
+  /** Compact variant for secondary workspaces inside a dashboard. */
+  dense?: boolean;
   showImageCaption?: boolean;
 }
 
 export function PageHero({
   title,
   subtitle,
-  image = APP_IMAGES.teamWork,
-  gradient = APP_HERO_GRADIENT,
+  image = HU_IMAGES.teamWork,
+  gradient,
   children,
-  badge,
+  eyebrow,
+  icon: Icon,
+  dense = false,
   showImageCaption = false,
 }: PageHeroProps) {
+  const { user } = useAuth();
   const imageMeta = getImageByUrl(image);
+  const reducedMotion = useReducedMotion();
+  const roleGradient = user?.Role && ['student', 'teacher', 'admin'].includes(user.Role)
+    ? roleActiveGradient(user.Role as 'student' | 'teacher' | 'admin')
+    : APP_HERO_GRADIENT;
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 12 }}
+    <motion.section
+      className={`page-hero${dense ? ' page-hero--dense' : ''}`}
+      style={{ background: gradient || roleGradient }}
+      initial={reducedMotion ? undefined : { opacity: 0, y: 14 }}
       animate={{ opacity: 1, y: 0 }}
-      className="relative rounded-2xl overflow-hidden shadow-lg min-h-[150px] sm:min-h-[170px] group"
+      transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
     >
       <motion.img
         src={image}
         alt={imageMeta ? `${imageMeta.title} — ${imageMeta.caption}` : ''}
-        className="absolute inset-0 w-full h-full object-cover"
+        className="page-hero__photo"
         aria-hidden={!imageMeta}
         loading="lazy"
-        whileHover={{ scale: 1.04 }}
-        transition={{ duration: 0.8 }}
+        initial={reducedMotion ? undefined : { scale: 1.08 }}
+        animate={{ scale: 1 }}
+        transition={{ duration: 1.6, ease: [0.22, 1, 0.36, 1] }}
       />
-      <div className="absolute inset-0" style={{ background: gradient }} />
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(255,255,255,0.15),transparent_50%)]" />
-      <div className="absolute -right-8 -top-8 w-32 h-32 rounded-full bg-white/10 blur-2xl pointer-events-none" />
+      <span className="page-hero__scrim" />
+      <span className="page-hero__rule" />
 
-      <div className="relative z-10 p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div className="min-w-0">
-          {badge && (
-            <span className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide bg-white/20 text-white/90 mb-2">
-              {badge}
+      <div className="page-hero__inner">
+        <motion.div
+          className="page-hero__copy"
+          initial={reducedMotion ? undefined : { opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.08, duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+        >
+          {eyebrow && (
+            <span className="page-hero__eyebrow">
+              {Icon && <Icon size={13} />}
+              {eyebrow}
             </span>
           )}
-          <h1 className="text-xl sm:text-2xl font-extrabold text-white drop-shadow-sm tracking-tight">{title}</h1>
-          {subtitle && <p className="text-white/80 text-sm mt-1 max-w-xl">{subtitle}</p>}
+          <h1>{title}</h1>
+          {subtitle && <p>{subtitle}</p>}
           {showImageCaption && imageMeta && (
-            <div className="mt-3 max-w-md hidden sm:block opacity-90">
+            <div className="page-hero__caption">
               <ImageCaption item={imageMeta} variant="overlay" />
             </div>
           )}
-        </div>
-        {children}
-      </div>
+        </motion.div>
 
-      <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-white/30 to-transparent" />
-    </motion.div>
+        {children && (
+          <motion.div
+            className="page-hero__aside"
+            initial={reducedMotion ? undefined : { opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.16, duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+          >
+            {children}
+          </motion.div>
+        )}
+      </div>
+    </motion.section>
   );
 }

@@ -1,6 +1,4 @@
-/**
- * npm run start:all — build if needed, start server, open browser
- */
+
 import { spawn, execSync } from 'child_process';
 import path from 'path';
 import { fileURLToPath } from 'url';

@@ -2,7 +2,7 @@ import { useRef } from 'react';
 import { motion, useMotionValue, useSpring, useTransform } from 'motion/react';
 import { Link } from 'react-router';
 import {
-  GraduationCap, Briefcase, Bot, BarChart3, Globe, ArrowUpRight, ShieldCheck,
+  GraduationCap, Briefcase, ClipboardCheck, BarChart3, Globe, ArrowUpRight, ShieldCheck,
 } from 'lucide-react';
 import { BrandLogo } from './BrandLogo';
 import { HU_BRAND_GREEN, UNIVERSITY_NAME } from '../config/appImages';
@@ -59,7 +59,7 @@ export function HomeBentoShowcase() {
           One system. <span style={{ color: '#86efac' }}>Every role.</span>
         </h2>
         <p className="ph-section-sub">
-          Dashboards, AI review, and secure HU ID access — designed for {UNIVERSITY_NAME}.
+          Dashboards, teacher review, and secure HU ID access — designed for {UNIVERSITY_NAME}.
         </p>
       </div>
 
@@ -75,7 +75,7 @@ export function HomeBentoShowcase() {
           </p>
           <div className="home-bento-stats">
             <div><strong style={{ color: HU_BRAND_GREEN }}>HU ID</strong><span>Verified access</span></div>
-            <div><strong style={{ color: '#93c5fd' }}>Athena</strong><span>AI assistance</span></div>
+            <div><strong style={{ color: '#93c5fd' }}>Review</strong><span>Teacher tools</span></div>
             <div><strong style={{ color: '#93c5fd' }}>Secure</strong><span>Role portals</span></div>
           </div>
         </BentoTile>
@@ -99,15 +99,15 @@ export function HomeBentoShowcase() {
         </BentoTile>
 
         <BentoTile className="home-bento-tile--wide">
-          <Bot size={24} style={{ color: HU_BRAND_GREEN }} />
-          <h3 className="welcome-heading text-base mt-3">Athena AI Review</h3>
+          <ClipboardCheck size={24} style={{ color: HU_BRAND_GREEN }} />
+          <h3 className="welcome-heading text-base mt-3">Teacher review tools</h3>
           <p className="welcome-body text-xs mt-1">
-            Similarity checks and review signals — teachers retain the final decision.
+            Similarity checks and review notes — teachers keep the final decision.
           </p>
           <div className="home-bento-pills">
             <span>Similarity scan</span>
-            <span>Batch analysis</span>
-            <span>Collision alerts</span>
+            <span>Batch comparison</span>
+            <span>Review notes</span>
           </div>
         </BentoTile>
 

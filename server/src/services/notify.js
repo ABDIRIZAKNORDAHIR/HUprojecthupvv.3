@@ -41,8 +41,8 @@ export async function notifyTeacherProjectBriefing({ teacherId, studentName, pro
   const preview = summaryPreview.replace(/\*\*/g, '').slice(0, 160);
   await createNotification({
     userId: teacherId,
-    title: 'New project submission — AI briefing ready',
-    message: `${studentName} submitted "${projectTitle}". AI read the project: ${preview}${summaryPreview.length > 160 ? '…' : ''}`,
+    title: 'New project submission — briefing ready',
+    message: `${studentName} submitted "${projectTitle}". Briefing: ${preview}${summaryPreview.length > 160 ? '…' : ''}`,
     type: 'ai_briefing',
     relatedProjectId: projectId,
   });

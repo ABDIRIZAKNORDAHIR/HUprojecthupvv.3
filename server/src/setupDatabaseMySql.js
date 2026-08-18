@@ -4,6 +4,7 @@ import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { query, getPool } from './db.js';
+import { getAdminBootstrap } from './config/security.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
@@ -26,7 +27,6 @@ CREATE TABLE IF NOT EXISTS Users (
   Specialty VARCHAR(100),
   ProfileImageUrl LONGTEXT,
   AccountStatus VARCHAR(20) NOT NULL DEFAULT 'approved',
-  PlainPassword VARCHAR(255),
   Phone VARCHAR(30),
   Bio TEXT,
   ContactInfo VARCHAR(500),
@@ -45,6 +45,25 @@ CREATE TABLE IF NOT EXISTS EmailOtps (
   ConsumedAt DATETIME NULL,
   CreatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   INDEX IX_EmailOtps_EmailPurpose (Email, Purpose)
+);
+
+CREATE TABLE IF NOT EXISTS AuthActionTokens (
+  Jti VARCHAR(64) PRIMARY KEY,
+  Purpose VARCHAR(40) NOT NULL,
+  ConsumedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS AuditLogs (
+  AuditLogId BIGINT AUTO_INCREMENT PRIMARY KEY,
+  ActorUserId INT NULL,
+  Action VARCHAR(80) NOT NULL,
+  EntityType VARCHAR(80) NULL,
+  EntityId VARCHAR(80) NULL,
+  MetadataJson TEXT NULL,
+  IpAddress VARCHAR(64) NULL,
+  CreatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX IX_AuditLogs_CreatedAt (CreatedAt),
+  INDEX IX_AuditLogs_Actor (ActorUserId)
 );
 
 CREATE TABLE IF NOT EXISTS Settings (
@@ -238,6 +257,11 @@ CREATE TABLE IF NOT EXISTS ClassAssignmentSubmissions (
   Content TEXT NOT NULL,
   AttachmentName VARCHAR(255),
   AttachmentData LONGTEXT,
+  Score DECIMAL(5,2) NULL,
+  BonusPoints DECIMAL(5,2) NOT NULL DEFAULT 0,
+  TeacherFeedback TEXT,
+  GradedAt DATETIME NULL,
+  GradedBy INT NULL,
   SubmittedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   UNIQUE KEY UQ_ClassAssignmentStudent (AssignmentId, StudentId)
 );
@@ -281,6 +305,21 @@ async function runSetupMySql() {
     await query(stmt);
   }
 
+  // Invalidate accounts whose recoverable password was exposed, then remove it.
+  const legacyPasswordColumn = await query(
+    `SELECT COUNT(*) AS c FROM information_schema.columns
+     WHERE table_schema = @db AND table_name = 'Users' AND column_name = 'PlainPassword'`,
+    { db: dbName }
+  );
+  if (Number(legacyPasswordColumn.recordset[0]?.c) > 0) {
+    await query(
+      `UPDATE Users SET PasswordHash = '!RESET_REQUIRED!'
+       WHERE PlainPassword IS NOT NULL AND PlainPassword <> ''`
+    );
+    await query('ALTER TABLE Users DROP COLUMN PlainPassword');
+    console.warn('[Security] Removed legacy plaintext passwords; affected users must use password reset');
+  }
+
   // Widen large payload columns on existing DBs (TEXT ~64KB is too small for base64 images)
   const widenColumns = [
     ['Users', 'ProfileImageUrl', 'LONGTEXT NULL'],
@@ -305,6 +344,21 @@ async function runSetupMySql() {
   ]) {
     try {
       await query(`ALTER TABLE Users ADD COLUMN ${column} ${definition}`);
+    } catch {
+      /* column already exists */
+    }
+  }
+
+  // Teacher grading fields for existing class-assignment submissions.
+  for (const [column, definition] of [
+    ['Score', 'DECIMAL(5,2) NULL'],
+    ['BonusPoints', 'DECIMAL(5,2) NOT NULL DEFAULT 0'],
+    ['TeacherFeedback', 'TEXT NULL'],
+    ['GradedAt', 'DATETIME NULL'],
+    ['GradedBy', 'INT NULL'],
+  ]) {
+    try {
+      await query(`ALTER TABLE ClassAssignmentSubmissions ADD COLUMN ${column} ${definition}`);
     } catch {
       /* column already exists */
     }
@@ -338,19 +392,20 @@ async function runSetupMySql() {
 
   const adminCheck = await query(`SELECT COUNT(*) AS c FROM Users WHERE Role = 'admin'`);
   if (Number(adminCheck.recordset[0].c) === 0) {
-    const hash = await bcrypt.hash(process.env.ADMIN_DEFAULT_PASSWORD || 'ProjectHub123!', 12);
+    const admin = getAdminBootstrap();
+    const hash = await bcrypt.hash(admin.password, 12);
     await query(
       `INSERT INTO Users (UniversityId, Email, PasswordHash, FirstName, LastName, Role, Department)
        VALUES (@uid, @email, @hash, @fn, @ln, 'admin', 'Administration')`,
       {
-        uid: process.env.ADMIN_UNIVERSITY_ID || 'HU0009000',
-        email: (process.env.ADMIN_EMAIL || 'daacadnuur646@gmail.com').toLowerCase().trim(),
+        uid: admin.universityId,
+        email: admin.email,
         hash,
-        fn: process.env.ADMIN_FIRST_NAME || 'System',
-        ln: process.env.ADMIN_LAST_NAME || 'Administrator',
+        fn: admin.firstName,
+        ln: admin.lastName,
       }
     );
-    console.log('[DB Setup] Created admin account:', process.env.ADMIN_UNIVERSITY_ID || 'HU0009000');
+    console.log('[DB Setup] Created admin account:', admin.universityId);
   } else {
     // Keep existing admin email aligned with ADMIN_EMAIL when set
     if (process.env.ADMIN_EMAIL) {

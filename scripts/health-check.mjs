@@ -1,5 +1,6 @@
 /**
  * Integration check — works on port 8080 (all-in-one) or 3004 (dev)
+ * Optional login checks use HEALTH_EMAIL / HEALTH_PASSWORD from the environment.
  */
 const BASES = [
   process.env.PROJECTHUB_API,
@@ -39,48 +40,41 @@ async function test() {
     results.push(['Database + API', 'FAIL: ' + e.message]);
   }
 
-  try {
-    const loginRes = await fetch(`${API}/auth/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: 'admin@hu.edu', password: 'ProjectHub123!', portalRole: 'admin' }),
-    });
-    const login = await loginRes.json();
-    if (!loginRes.ok) throw new Error(login.error || loginRes.status);
-    results.push(['Admin login', 'OK']);
-    const token = login.token;
-    const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
+  const healthEmail = process.env.HEALTH_EMAIL;
+  const healthPassword = process.env.HEALTH_PASSWORD;
+  if (!healthEmail || !healthPassword) {
+    results.push(['Auth flow', 'SKIP: set HEALTH_EMAIL and HEALTH_PASSWORD to test login']);
+  } else {
+    try {
+      const loginRes = await fetch(`${API}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: healthEmail, password: healthPassword, portalRole: 'admin' }),
+      });
+      const login = await loginRes.json();
+      if (!loginRes.ok) throw new Error(login.error || loginRes.status);
+      results.push(['Admin login', 'OK']);
+      const headers = { Authorization: `Bearer ${login.token}`, 'Content-Type': 'application/json' };
 
-    for (const [name, path] of [
-      ['auth/me', '/auth/me'],
-      ['admin/stats', '/admin/stats'],
-      ['admin/live', '/admin/live'],
-      ['projects', '/projects'],
-      ['settings', '/settings'],
-    ]) {
-      const r = await fetch(`${API}${path}`, { headers });
-      const d = await r.json().catch(() => ({}));
-      results.push([name, r.ok ? 'OK' : `FAIL ${r.status}: ${d.error || ''}`]);
+      for (const [name, path] of [
+        ['auth/me', '/auth/me'],
+        ['admin/stats', '/admin/stats'],
+        ['admin/live', '/admin/live'],
+        ['projects', '/projects'],
+        ['settings', '/settings'],
+      ]) {
+        const r = await fetch(`${API}${path}`, { headers });
+        const d = await r.json().catch(() => ({}));
+        results.push([name, r.ok ? 'OK' : `FAIL ${r.status}: ${d.error || ''}`]);
+      }
+    } catch (e) {
+      results.push(['Auth flow', 'FAIL: ' + e.message]);
     }
-
-    const studentLogin = await fetch(`${API}/auth/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        universityId: 'HU000-1001',
-        email: 'alex.chen@hu.edu',
-        password: 'ProjectHub123!',
-      }),
-    });
-    const sl = await studentLogin.json();
-    results.push(['Student login', studentLogin.ok ? 'OK' : `FAIL: ${sl.error}`]);
-  } catch (e) {
-    results.push(['Auth flow', 'FAIL: ' + e.message]);
   }
 
   console.log('\n=== ProjectHub Integration Check ===\n');
   for (const [name, status] of results) {
-    const ok = status.startsWith('OK') || status.startsWith('WARN');
+    const ok = status.startsWith('OK') || status.startsWith('WARN') || status.startsWith('SKIP');
     console.log(`${ok ? '✓' : '✗'} ${name}: ${status}`);
   }
   const failed = results.filter(([, s]) => s.startsWith('FAIL'));

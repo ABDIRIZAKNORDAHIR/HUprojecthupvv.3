@@ -1,5 +1,6 @@
 import webpush from 'web-push';
 import { query } from '../db.js';
+import { isStrictProduction } from '../config/security.js';
 
 let configured = false;
 
@@ -10,6 +11,9 @@ function ensureVapid() {
   const subject = process.env.VAPID_SUBJECT?.trim() || 'mailto:admin@projecthub.local';
 
   if (!publicKey || !privateKey) {
+    if (isStrictProduction()) {
+      throw new Error('VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY are required in production');
+    }
     const keys = webpush.generateVAPIDKeys();
     publicKey = keys.publicKey;
     privateKey = keys.privateKey;
@@ -29,24 +33,8 @@ export function getVapidPublicKey() {
 }
 
 export async function ensurePushTable() {
-  try {
-    await query(`
-      CREATE TABLE IF NOT EXISTS PushSubscriptions (
-        SubscriptionId INT AUTO_INCREMENT PRIMARY KEY,
-        UserId INT NOT NULL,
-        Endpoint VARCHAR(500) NOT NULL,
-        P256dh VARCHAR(255) NOT NULL,
-        Auth VARCHAR(255) NOT NULL,
-        UserAgent VARCHAR(255) NULL,
-        CreatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE KEY UQ_PushEndpoint (Endpoint),
-        INDEX IX_Push_UserId (UserId)
-      )
-    `);
-  } catch (err) {
-    // MSSQL / Postgres may need different DDL — try generic fallbacks silently
-    console.warn('[Push] ensurePushTable:', err.message);
-  }
+  // Database setup owns dialect-specific DDL; fail fast if it is incomplete.
+  await query('SELECT TOP 1 SubscriptionId FROM PushSubscriptions');
 }
 
 export async function savePushSubscription(userId, subscription, userAgent = null) {

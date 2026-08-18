@@ -1,6 +1,6 @@
 import { motion, AnimatePresence } from "motion/react";
 import { useNavigate } from "react-router";
-import { X, Sparkles, Scan, FileSearch, AlertTriangle, ChevronRight, MessageSquare } from "lucide-react";
+import { X, ClipboardList, Scan, FileSearch, ChevronRight, MessageSquare } from "lucide-react";
 import { HU_BRAND_GREEN } from "../config/appImages";
 
 interface QuickActionsPanelProps {
@@ -10,7 +10,7 @@ interface QuickActionsPanelProps {
 }
 
 type QuickAction = {
-  icon: typeof Sparkles;
+  icon: typeof ClipboardList;
   label: string;
   desc: string;
   color: string;
@@ -18,16 +18,15 @@ type QuickAction = {
 };
 
 const teacherActions: QuickAction[] = [
-  { icon: Sparkles, label: "Run AI Analysis", desc: "Analyze pending submissions", color: HU_BRAND_GREEN, path: "/ai-queue" },
-  { icon: MessageSquare, label: "Messages & Chat", desc: "DMs, group chat, and file sharing", color: "#0EA5E9", path: "/messages" },
-  { icon: FileSearch, label: "All Submissions", desc: "Review student project submissions", color: "#2563EB", path: "/submissions" },
-  { icon: AlertTriangle, label: "View Collisions", desc: "Similarity and collision alerts", color: "#EAB308", path: "/collisions" },
-  { icon: FileSearch, label: "Project Atlas", desc: "Browse the university project archive", color: "#38BDF8", path: "/atlas" },
+  { icon: ClipboardList, label: "Open review queue", desc: "Review pending submissions", color: HU_BRAND_GREEN, path: "/ai-queue" },
+  { icon: MessageSquare, label: "Messages", desc: "Student and group conversations", color: "#0EA5E9", path: "/messages" },
+  { icon: FileSearch, label: "All submissions", desc: "Browse student project work", color: "#2563EB", path: "/submissions" },
+  { icon: FileSearch, label: "Project Atlas", desc: "University project archive", color: "#38BDF8", path: "/atlas" },
 ];
 
 const adminActions: QuickAction[] = [
   ...teacherActions,
-  { icon: Scan, label: "Batch AI Scanner", desc: "Run bulk similarity analysis", color: "#7C3AED", path: "/batch-scanner" },
+  { icon: Scan, label: "Originality scanner", desc: "Bulk similarity comparison", color: "#7C3AED", path: "/batch-scanner" },
 ];
 
 export function QuickActionsPanel({ open, onClose, role }: QuickActionsPanelProps) {
@@ -54,8 +53,8 @@ export function QuickActionsPanel({ open, onClose, role }: QuickActionsPanelProp
           >
             <div className="flex items-center justify-between px-5 py-4 border-b border-border">
               <div>
-                <h3 style={{ fontSize: 15, fontWeight: 700, color: "#111827" }}>Quick Actions</h3>
-                <p style={{ fontSize: 12, color: "#64748B" }}>Athena AI Tools</p>
+                <h3 style={{ fontSize: 15, fontWeight: 700, color: "#111827" }}>Quick actions</h3>
+                <p style={{ fontSize: 12, color: "#64748B" }}>Common review tools</p>
               </div>
               <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400">
                 <X size={16} />
@@ -90,11 +89,11 @@ export function QuickActionsPanel({ open, onClose, role }: QuickActionsPanelProp
             <div className="p-4 border-t border-border">
               <div className="p-3 rounded-xl bg-gradient-to-r from-green-50 to-blue-50 border border-green-100">
                 <div className="flex items-center gap-2 mb-1">
-                  <Sparkles size={14} style={{ color: HU_BRAND_GREEN }} />
-                  <span style={{ fontSize: 12, fontWeight: 700, color: HU_BRAND_GREEN }}>Athena AI</span>
+                  <ClipboardList size={14} style={{ color: HU_BRAND_GREEN }} />
+                  <span style={{ fontSize: 12, fontWeight: 700, color: HU_BRAND_GREEN }}>Teacher judgment</span>
                 </div>
                 <p style={{ fontSize: 11, color: "#64748B", lineHeight: 1.4 }}>
-                  All AI outputs are advisory. Teachers make final approval decisions.
+                  Similarity notes are advisory only. Teachers make the final academic decision.
                 </p>
               </div>
             </div>

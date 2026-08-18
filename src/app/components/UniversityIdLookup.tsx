@@ -13,6 +13,7 @@ export interface LookupPerson {
   Department?: string;
   Specialty?: string;
   ActiveProjects?: number;
+  ProfileImageUrl?: string | null;
 }
 
 interface UniversityIdLookupProps {
@@ -45,12 +46,12 @@ export function UniversityIdLookup({
     try {
       if (role === 'student') {
         const r = await api.lookupStudent(trimmed);
-        const s = r.student as LookupPerson;
+        const s = r.student as unknown as LookupPerson;
         setPerson(s);
         onFound(s);
       } else {
         const r = await api.lookupTeacher(trimmed);
-        const t = r.teacher as LookupPerson;
+        const t = r.teacher as unknown as LookupPerson;
         setPerson(t);
         onFound(t);
       }
@@ -98,7 +99,7 @@ export function UniversityIdLookup({
         <div className="mt-3 p-4 rounded-xl bg-green-50 border border-green-200">
           <p className="text-[10px] uppercase font-bold text-green-700 mb-2">Account found — you can proceed</p>
           <div className="flex items-center gap-3">
-            <UserAvatar firstName={person.FirstName} lastName={person.LastName} role={role} size="md" />
+            <UserAvatar firstName={person.FirstName} lastName={person.LastName} role={role} size="md" profileImageUrl={person.ProfileImageUrl} />
             <div className="min-w-0">
               <p className="font-bold text-gray-900">{person.FirstName} {person.LastName}</p>
               <p className="font-mono text-sm font-bold text-green-700 flex items-center gap-1">

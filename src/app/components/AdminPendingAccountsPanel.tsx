@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
-import { UserCheck, UserX, Clock, Shield } from 'lucide-react';
+import { UserCheck, UserX, Shield } from 'lucide-react';
 import { api } from '../api/client';
+import { WaitingBadge, WaitingMark } from './WaitingIcon';
 
 export function AdminPendingAccountsPanel({ onChange }: { onChange?: () => void }) {
   const [pending, setPending] = useState<Array<Record<string, unknown>>>([]);
@@ -59,8 +60,8 @@ export function AdminPendingAccountsPanel({ onChange }: { onChange?: () => void 
     <div className="bg-white rounded-2xl border shadow-sm overflow-hidden">
       <div className="px-5 py-4 border-b bg-gradient-to-r from-amber-50 to-white flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          <Clock size={18} className="text-amber-600" />
-          <h3 className="font-bold">Pending Account Approvals</h3>
+          <WaitingMark size={18} />
+          <h3 className="font-bold">Accounts waiting for approval</h3>
           {pending.length > 0 && (
             <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-xs font-bold">
               {pending.length}
@@ -86,12 +87,12 @@ export function AdminPendingAccountsPanel({ onChange }: { onChange?: () => void 
                 </div>
                 <p className="font-semibold mt-1">{String(p.FirstName)} {String(p.LastName)}</p>
                 <p className="text-xs text-gray-500">{String(p.Email)} · {String(p.Department || 'No department')}</p>
-                {p.PlainPassword && (
-                  <p className="text-xs mt-1 font-mono text-amber-800 bg-amber-50 inline-block px-2 py-0.5 rounded">Password: {String(p.PlainPassword)}</p>
-                )}
                 <p className="text-xs text-gray-400 mt-1">
                   Registered {new Date(String(p.CreatedAt)).toLocaleString()}
                 </p>
+                <WaitingBadge size={11} className="mt-2">
+                  This {String(p.Role)} is waiting for your decision
+                </WaitingBadge>
               </div>
               <div className="flex gap-2 flex-shrink-0">
                 <motion.button whileTap={{ scale: 0.97 }} disabled={actionId === Number(p.UserId)}

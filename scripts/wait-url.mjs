@@ -1,7 +1,4 @@
-/**
- * Wait until URL returns HTTP 200.
- * Usage: node scripts/wait-url.mjs <url> [maxAttempts]
- */
+
 const url = process.argv[2];
 const maxAttempts = Number(process.argv[3]) || 45;
 const timeoutMs = 3000;

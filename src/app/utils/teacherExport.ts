@@ -17,9 +17,8 @@ export function buildTeacherReportSections(
 ): ReportSection[] {
   const summaryRows: unknown[][] = [
     ['Teacher', summary.teacherName],
-    ['Pending AI Review', summary.pending],
+    ['Pending review', summary.pending],
     ['Unique Projects (>80%)', summary.unique],
-    ['Collision Alerts', summary.collisions],
     ['Approved Projects', summary.approved],
     ['Total Submissions', submissions.length],
     ['Report Generated', new Date().toLocaleString()],
@@ -41,10 +40,10 @@ export function buildTeacherReportSections(
   return [
     { sheetName: 'Statistics', headers: ['Metric', 'Value'], rows: summaryRows },
     { sheetName: 'Status Breakdown', headers: ['Status', 'Count'], rows: statusRows },
-    { sheetName: 'AI Scores', headers: ['Score Range', 'Count'], rows: aiScoreRows },
+    { sheetName: 'Uniqueness', headers: ['Score Range', 'Count'], rows: aiScoreRows },
     {
       sheetName: 'Submissions',
-      headers: ['Student', 'Project', 'AI Score', 'Confidence', 'Status', 'Date', 'AI Suggestion'],
+      headers: ['Student', 'Project', 'Uniqueness', 'Confidence', 'Status', 'Date', 'Review note'],
       rows: submissionRows.length ? submissionRows : [['—', 'No submissions', '—', '—', '—', '—', '—']],
     },
   ];
@@ -72,8 +71,8 @@ export function buildTeacherExportCharts(
       barData: statusData.map(d => ({ label: d.name, value: d.count, color: d.fill })),
     },
     {
-      title: 'AI Uniqueness Scores',
-      subtitle: 'Distribution of AI analysis scores',
+      title: 'Uniqueness scores',
+      subtitle: 'Distribution of uniqueness scores',
       type: 'bar',
       barData: aiScoreData.map(d => ({ label: d.range, value: d.count, color: '#7C3AED' })),
     },
@@ -104,7 +103,7 @@ export function buildTeacherExportMeta(summary: TeacherExportSummary, submission
     reportType: 'teacher',
     organization: UNIVERSITY_NAME,
     teacherName: summary.teacherName,
-    subtitle: `${APP_BRAND_NAME} · Teacher review & AI analytics`,
+    subtitle: `${APP_BRAND_NAME} · Teacher review & analytics`,
     charts: buildTeacherExportCharts(summary, submissions),
   };
 }

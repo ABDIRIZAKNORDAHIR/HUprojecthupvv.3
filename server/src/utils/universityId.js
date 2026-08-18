@@ -1,4 +1,4 @@
-/** HU000 + phone digits in groups of 4. Example: HU000-1234 or HU000-1234-5678 */
+/** HU000 + digits in groups of 4. Example: HU000-1234 or HU000-1234-5678 */
 
 const HU_PREFIX = 'HU000';
 
@@ -17,9 +17,9 @@ export function normalizeUniversityId(raw) {
 export function formatUniversityId(raw) {
   const id = normalizeUniversityId(raw);
   if (!id.startsWith(HU_PREFIX)) return id;
-  const phone = id.slice(HU_PREFIX.length);
-  if (!phone) return HU_PREFIX;
-  const groups = phone.match(/.{1,4}/g) || [];
+  const digits = id.slice(HU_PREFIX.length);
+  if (!digits) return HU_PREFIX;
+  const groups = digits.match(/.{1,4}/g) || [];
   return `${HU_PREFIX}-${groups.join('-')}`;
 }
 
@@ -27,11 +27,11 @@ export function validateUniversityId(raw) {
   const id = normalizeUniversityId(raw);
   if (!id) return { ok: false, error: 'University ID is required' };
   if (!id.startsWith(HU_PREFIX)) {
-    return { ok: false, error: 'University ID must start with HU000 followed by phone numbers' };
+    return { ok: false, error: 'University ID must start with HU000 followed by digits' };
   }
   const digits = id.slice(HU_PREFIX.length);
   if (!/^\d+$/.test(digits)) {
-    return { ok: false, error: 'After HU000 use numbers only (phone digits in groups of 4)' };
+    return { ok: false, error: 'After HU000 use numbers only (digits in groups of 4)' };
   }
   if (digits.length < 4) {
     return { ok: false, error: 'Add at least 4 digits after HU000 (e.g. HU000-1234)' };
@@ -40,11 +40,11 @@ export function validateUniversityId(raw) {
     return { ok: false, error: 'Maximum 16 digits after HU000 (four groups of 4)' };
   }
   if (digits.length % 4 !== 0) {
-    return { ok: false, error: 'Phone digits must be in groups of 4 (4, 8, 12, or 16 digits after HU000)' };
+    return { ok: false, error: 'Digits must be in groups of 4 (4, 8, 12, or 16 digits after HU000)' };
   }
   return { ok: true, id };
 }
 
 export function universityIdHint() {
-  return 'Format: HU000 then phone numbers in groups of 4. Example: HU000-1234 or HU000-1234-5678';
+  return 'Format: HU000 then digits in groups of 4. Example: HU000-1234 or HU000-1234-5678';
 }

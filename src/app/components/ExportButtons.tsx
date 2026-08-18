@@ -41,7 +41,7 @@ export function ExportButtons({ onExportExcel, onExportPdf, label, compact, vari
 }
 
 export function exportAdminDashboardReport(
-  sections: ReturnType<typeof import('./adminExport').buildAdminReportSections>,
+  sections: ReturnType<typeof import('../utils/adminExport').buildAdminReportSections>,
   format: 'excel' | 'pdf'
 ) {
   const stamp = new Date().toISOString().slice(0, 10);

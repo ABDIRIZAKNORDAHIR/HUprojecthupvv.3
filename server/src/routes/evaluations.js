@@ -1,13 +1,14 @@
 import { Router } from 'express';
 import { query } from '../db.js';
+import { sendError } from '../utils/httpError.js';
 import { authMiddleware, attachUserDetails } from '../middleware/auth.js';
 import { notifyEvaluation } from '../services/notify.js';
+import { getProjectParticipantIds, userCanAccessProject } from '../utils/projectAccess.js';
 
 const router = Router({ mergeParams: true });
 router.use(authMiddleware, attachUserDetails);
 
 async function canEvaluate(user, projectId) {
-  if (user.role === 'admin') return true;
   if (user.role !== 'teacher') return false;
   const r = await query(
     'SELECT 1 FROM Projects WHERE ProjectId = @pid AND AssignedByTeacherId = @uid',
@@ -19,6 +20,10 @@ async function canEvaluate(user, projectId) {
 router.get('/', async (req, res) => {
   try {
     const projectId = parseInt(req.params.projectId, 10);
+    if (!(await userCanAccessProject(req.user, projectId, { allowAdmin: true }))) {
+      return res.status(403).json({ error: 'Not authorized for this project' });
+    }
+    const studentFilter = req.user.role === 'student' ? 'AND e.StudentId = @uid' : '';
     const result = await query(
       `SELECT e.*, t.FirstName + ' ' + t.LastName AS TeacherName,
               s.FirstName + ' ' + s.LastName AS StudentName
@@ -26,12 +31,13 @@ router.get('/', async (req, res) => {
        JOIN Users t ON e.TeacherId = t.UserId
        JOIN Users s ON e.StudentId = s.UserId
        WHERE e.ProjectId = @pid
+       ${studentFilter}
        ORDER BY e.EvaluatedAt DESC`,
-      { pid: projectId }
+      { pid: projectId, uid: req.user.userId }
     );
     res.json({ evaluations: result.recordset });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, err);
   }
 });
 
@@ -46,14 +52,24 @@ router.post('/', async (req, res) => {
     if (!feedback?.trim()) {
       return res.status(400).json({ error: 'Feedback is required' });
     }
+    const numericGrade = grade == null || grade === '' ? null : Number(grade);
+    if (numericGrade != null && (!Number.isFinite(numericGrade) || numericGrade < 0 || numericGrade > 100)) {
+      return res.status(400).json({ error: 'Grade must be between 0 and 100' });
+    }
 
     const proj = await query(
       'SELECT Title, OwnerStudentId FROM Projects WHERE ProjectId = @pid',
       { pid: projectId }
     );
     if (!proj.recordset.length) return res.status(404).json({ error: 'Project not found' });
-    const targetStudent = studentId || proj.recordset[0].OwnerStudentId;
-    if (!targetStudent) return res.status(400).json({ error: 'No student assigned to this project' });
+    const targetStudent = Number(studentId || proj.recordset[0].OwnerStudentId);
+    if (!Number.isInteger(targetStudent) || targetStudent <= 0) {
+      return res.status(400).json({ error: 'No student assigned to this project' });
+    }
+    const studentIds = await getProjectParticipantIds(projectId, { includeTeacher: false });
+    if (!studentIds.includes(targetStudent)) {
+      return res.status(400).json({ error: 'Student is not a member of this project' });
+    }
 
     const ins = await query(
       `INSERT INTO ProjectEvaluations (ProjectId, StudentId, TeacherId, Grade, Feedback, Remarks)
@@ -63,7 +79,7 @@ router.post('/', async (req, res) => {
         pid: projectId,
         studentId: targetStudent,
         teacherId: req.user.userId,
-        grade: grade != null ? Number(grade) : null,
+        grade: numericGrade,
         feedback: feedback.trim(),
         remarks: remarks?.trim() || null,
       }
@@ -77,13 +93,13 @@ router.post('/', async (req, res) => {
     await notifyEvaluation({
       studentId: targetStudent,
       projectTitle: proj.recordset[0].Title,
-      grade,
+      grade: numericGrade,
       teacherName: teacher.recordset[0]?.Name || 'Your teacher',
       projectId,
     });
 
     // Also post evaluation summary to project chat
-    const gradeText = grade != null ? `Grade: ${grade}%` : 'Evaluation posted';
+    const gradeText = numericGrade != null ? `Grade: ${numericGrade}%` : 'Evaluation posted';
     await query(
       `INSERT INTO Messages (ProjectId, SenderId, ReceiverId, Content, MessageScope)
        VALUES (@pid, @senderId, @receiverId, @content, 'teacher_student')`,
@@ -97,7 +113,7 @@ router.post('/', async (req, res) => {
 
     res.status(201).json({ evaluation: ins.recordset[0] });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, err);
   }
 });
 
@@ -115,7 +131,7 @@ router.get('/document-analyses', async (req, res) => {
       );
       if (!ok.recordset.length) return res.status(403).json({ error: 'Not your project' });
     } else if (req.user.role === 'student') {
-      return res.status(403).json({ error: 'AI analysis is for teachers only' });
+      return res.status(403).json({ error: 'Automated assessment is available to teachers only' });
     }
     const result = await query(
       `SELECT * FROM DocumentAnalyses WHERE ProjectId = @pid ORDER BY AnalyzedAt DESC`,
@@ -132,7 +148,7 @@ router.get('/document-analyses', async (req, res) => {
       })),
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, err);
   }
 });
 

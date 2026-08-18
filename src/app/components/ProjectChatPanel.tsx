@@ -1,7 +1,13 @@
 import { useRef, useState } from 'react';
 import { motion } from 'motion/react';
 import { Send, Paperclip, Image, Film, FileText, Video, MessageSquare, Loader2 } from 'lucide-react';
-import { MessageContent, getAttachmentKind, MAX_ATTACHMENT_BYTES, type ChatMessage } from './ChatMessage';
+import {
+  MessageContent,
+  getAttachmentKind,
+  MAX_ATTACHMENT_BYTES,
+  MAX_ATTACHMENT_LABEL,
+  type ChatMessage,
+} from './ChatMessage';
 import { UserAvatar } from './UserAvatar';
 import { DocumentAnalysisPanel } from './DocumentAnalysisPanel';
 import { compressImageFile, estimateDataUrlBytes } from '../utils/compressImage';
@@ -44,7 +50,7 @@ export function ProjectChatPanel({
   const isStudent = userRole === 'student';
   const headerLabel = userRole === 'admin'
     ? 'Official Communication (University Admin · Remote Admin)'
-    : `Direct conversation — ${isStudent ? 'Your Teacher' : 'Your Student'}: ${partner.name}`;
+    : `Project conversation — ${isStudent ? 'Teacher' : 'Student'}: ${partner.name}`;
 
   const pickFile = async (file: File | undefined, forcedType?: 'image' | 'video' | 'file') => {
     if (!file) return;
@@ -73,7 +79,7 @@ export function ProjectChatPanel({
     }
 
     if (file.size > MAX_ATTACHMENT_BYTES) {
-      onError('File too large — maximum 4MB');
+      onError(`File too large — maximum ${MAX_ATTACHMENT_LABEL}`);
       return;
     }
     const reader = new FileReader();
@@ -110,7 +116,7 @@ export function ProjectChatPanel({
           </a>
         </div>
         <p className="text-[11px] text-gray-400 mt-2">
-          Send text, project images, videos, and files. Photos are compressed automatically before upload.
+          Keep messages professional. Share text, images, videos, and files up to {MAX_ATTACHMENT_LABEL}. Photos are compressed automatically.
         </p>
       </div>
 
@@ -194,7 +200,8 @@ export function ProjectChatPanel({
             placeholder="Write a message about your project..."
             className="flex-1 px-3 py-2 rounded-xl border text-sm min-w-0" />
           <motion.button whileTap={{ scale: 0.95 }} onClick={onSend} disabled={sending}
-            className="px-4 py-2 rounded-xl bg-blue-600 text-white disabled:opacity-50">
+            className="px-4 py-2 rounded-xl bg-blue-600 text-white disabled:opacity-50"
+            aria-label="Send message">
             <Send size={16} />
           </motion.button>
         </div>

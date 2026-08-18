@@ -1,6 +1,4 @@
-/**
- * Production server: built UI + API on one port (for tunnel / cloud deploy).
- */
+
 import { spawn } from 'child_process';
 import path from 'path';
 import { fileURLToPath } from 'url';

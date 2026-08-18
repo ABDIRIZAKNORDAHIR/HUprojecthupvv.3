@@ -1,13 +1,13 @@
-import { ShieldCheck, Users, Bot, IdCard, ClipboardCheck, Sparkles } from 'lucide-react';
+import { ShieldCheck, Users, ClipboardCheck, IdCard, MessageSquare } from 'lucide-react';
 import { HU_BRAND_GREEN } from '../config/appImages';
 
 const items = [
   { icon: IdCard, label: 'HU ID' },
   { icon: Users, label: 'Teams' },
-  { icon: Bot, label: 'AI Review' },
+  { icon: ClipboardCheck, label: 'Review' },
   { icon: ClipboardCheck, label: 'Approvals' },
   { icon: ShieldCheck, label: 'Secure' },
-  { icon: Sparkles, label: 'Chat' },
+  { icon: MessageSquare, label: 'Chat' },
 ];
 
 export function HomeMarqueeStrip() {

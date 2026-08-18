@@ -2,25 +2,28 @@ import { useEffect, useState, useCallback } from 'react';
 import { motion } from 'motion/react';
 import {
   MessageSquare, Trophy, BarChart3, FolderKanban, Mail, ChevronRight, Award, GraduationCap, Users, ClipboardList,
+  Eye, CheckCircle2,
 } from 'lucide-react';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { Link } from 'react-router';
 import { api, type Project } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { PageHero } from '../components/PageHero';
-import { APP_IMAGES } from '../config/appImages';
+import { HU_IMAGES } from '../config/appImages';
 import { KPICard } from '../components/KPICard';
 import { QuickActionTile } from '../components/QuickActionTile';
 import { ProgressRing } from '../components/ProgressRing';
 import { GlassCard } from '../components/GlassCard';
+import { WaitingMark } from '../components/WaitingIcon';
 
-const statusLabel: Record<string, { text: string; color: string; bg: string }> = {
+const statusLabel: Record<string, { text: string; color: string; bg: string; waiting?: boolean }> = {
   assigned: { text: 'In progress', color: '#2563EB', bg: '#EFF6FF' },
-  submitted: { text: 'Awaiting teacher', color: '#EAB308', bg: '#FEFCE8' },
-  under_review: { text: 'Under review', color: '#EAB308', bg: '#FEFCE8' },
+  submitted: { text: 'Awaiting teacher', color: '#B45309', bg: '#FFF7E6', waiting: true },
+  under_review: { text: 'Under review', color: '#B45309', bg: '#FFF7E6', waiting: true },
   approved: { text: 'Approved', color: '#168055', bg: '#F0FDF4' },
   rejected: { text: 'Rejected', color: '#EF4444', bg: '#FEF2F2' },
   changes_requested: { text: 'Changes requested', color: '#EA580C', bg: '#FFF7ED' },
-  pending_teacher: { text: 'Waiting for teacher', color: '#7C3AED', bg: '#F5F3FF' },
+  pending_teacher: { text: 'Waiting for teacher', color: '#B45309', bg: '#FFF7E6', waiting: true },
 };
 
 function progressPercent(status: string): number {
@@ -69,18 +72,33 @@ export function StudentDashboardPage() {
   const overallProgress = projects.length
     ? Math.round(projects.reduce((s, p) => s + progressPercent(p.Status), 0) / projects.length)
     : 0;
+  const progressData = [
+    { name: 'Active', value: stats.active, color: '#16A34A' },
+    { name: 'In review', value: stats.pendingReview, color: '#84CC16' },
+    { name: 'Approved', value: stats.approved, color: '#166534' },
+    {
+      name: 'Other',
+      value: Math.max(0, stats.totalProjects - stats.active - stats.pendingReview - stats.approved),
+      color: '#DDEBE5',
+    },
+  ].filter(item => item.value > 0);
 
   return (
-    <div className="p-4 sm:p-6 max-w-screen-2xl mx-auto space-y-6 pb-24">
+    <div className="dashboard-canvas space-y-6 pb-mobile-nav">
       <PageHero
-        title={user?.FirstName || 'Student'}
-        subtitle={user?.UniversityId}
-        image={APP_IMAGES.studentsStudy}
+        icon={GraduationCap}
+        eyebrow="Student workspace"
+        title={`Welcome back, ${user?.FirstName || 'Student'}`}
+        subtitle={`${user?.UniversityId || 'Student workspace'} · Keep your team, submissions and supervisor feedback visible in one place.`}
+        image={HU_IMAGES.library}
       >
         {!loading && projects.length > 0 && (
-          <div className="flex items-center gap-3 bg-white/15 backdrop-blur-sm rounded-xl px-4 py-2 border border-white/20">
+          <div className="hero-stat flex items-center gap-3 text-left">
             <ProgressRing value={overallProgress} size={48} strokeWidth={5} color="#ffffff" />
-            <p className="text-white text-lg font-extrabold tabular-nums">{overallProgress}%</p>
+            <div>
+              <strong>{overallProgress}%</strong>
+              <em>Overall progress</em>
+            </div>
           </div>
         )}
       </PageHero>
@@ -89,18 +107,71 @@ export function StudentDashboardPage() {
         <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm">{error}</div>
       )}
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        <KPICard title="Projects" value={loading ? '…' : stats.totalProjects} icon={FolderKanban} iconColor="#2563EB" iconBg="#EFF6FF" index={0} />
-        <KPICard title="Active" value={loading ? '…' : stats.active} icon={BarChart3} iconColor="#16A34A" iconBg="#F0FDF4" index={1} />
+      <div className="grid grid-cols-2 lg:grid-cols-4 2xl:grid-cols-4 gap-3 sm:gap-4">
+        <KPICard title="Projects" value={loading ? '…' : stats.totalProjects} icon={FolderKanban} iconColor="#166534" iconBg="#F0FDF4" index={0} />
+        <KPICard title="Active" value={loading ? '…' : stats.active} icon={BarChart3} iconColor="#65A30D" iconBg="#F7FEE7" index={1} />
         <KPICard title="Invites" value={loading ? '…' : inviteCount} icon={Mail} iconColor="#EAB308" iconBg="#FEFCE8" index={2} />
-        <KPICard title="In review" value={loading ? '…' : stats.pendingReview} icon={Trophy} iconColor="#7C3AED" iconBg="#F5F3FF" index={3} />
+        <KPICard title="Waiting on teacher" value={loading ? '…' : stats.pendingReview} icon={WaitingMark} iconColor="#B45309" iconBg="#FFF7E6" index={3} />
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         <QuickActionTile to="/projects" title="Projects" icon={FolderKanban} gradient="linear-gradient(135deg, #16A34A, #22C55E)" accent="#16A34A" index={0} />
-        <QuickActionTile to="/class-assignments" title="Assignments" icon={ClipboardList} gradient="linear-gradient(135deg, #0F766E, #14B8A6)" accent="#0F766E" index={1} />
-        <QuickActionTile to="/my-teacher" title="Teacher" icon={GraduationCap} gradient="linear-gradient(135deg, #1D4ED8, #3B82F6)" accent="#1D4ED8" index={2} />
-        <QuickActionTile to="/team" title="Team" icon={Users} gradient="linear-gradient(135deg, #334155, #64748B)" accent="#334155" index={3} />
+        <QuickActionTile to="/class-assignments" title="Assignments" icon={ClipboardList} gradient="linear-gradient(135deg, #65A30D, #84CC16)" accent="#65A30D" index={1} />
+        <QuickActionTile to="/my-teacher" title="Teacher" icon={GraduationCap} gradient="linear-gradient(135deg, #0F2D5C, #1E4E88)" accent="#0F2D5C" index={2} />
+        <QuickActionTile to="/team" title="Team" icon={Users} gradient="linear-gradient(135deg, #166534, #16A34A)" accent="#166534" index={3} />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <GlassCard className="dashboard-section-card lg:col-span-2 p-0" delay={0.06}>
+          <div className="dashboard-section-card__head">
+            <div>
+              <span className="dashboard-section-card__eyebrow"><Eye size={13} /> Project visibility</span>
+              <h2 className="mt-1">Your academic workspace at a glance</h2>
+            </div>
+            <span className="dashboard-live-pill"><i /> Synced now</span>
+          </div>
+          <div className="student-visibility-grid">
+            <div className="student-visibility-chart">
+              {progressData.length ? (
+                <ResponsiveContainer width="100%" height={180}>
+                  <PieChart>
+                    <Pie data={progressData} dataKey="value" nameKey="name" innerRadius={52} outerRadius={76} paddingAngle={4}>
+                      {progressData.map(item => <Cell key={item.name} fill={item.color} />)}
+                    </Pie>
+                    <Tooltip />
+                  </PieChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="student-empty-ring"><Eye size={22} /></div>
+              )}
+              <div className="student-visibility-chart__value"><strong>{overallProgress}%</strong><span>overall</span></div>
+            </div>
+            <div className="student-visibility-summary">
+              <article><span><FolderKanban size={15} /></span><div><em>Projects visible</em><strong>{stats.totalProjects}</strong></div></article>
+              <article className="is-waiting"><span><WaitingMark size={15} /></span><div><em>Awaiting review</em><strong>{stats.pendingReview}</strong></div></article>
+              <article><span><CheckCircle2 size={15} /></span><div><em>Approved</em><strong>{stats.approved}</strong></div></article>
+            </div>
+          </div>
+        </GlassCard>
+
+        <GlassCard className="dashboard-section-card student-next-card p-0" delay={0.1}>
+          <div className="dashboard-section-card__head">
+            <div>
+              <span className="dashboard-section-card__eyebrow">Next step</span>
+              <h2 className="mt-1">Keep the project moving</h2>
+            </div>
+          </div>
+          <div className="student-next-card__body">
+            <span className={`student-next-card__icon${stats.pendingReview > 0 ? ' is-waiting' : ''}`}>
+              {stats.pendingReview > 0 ? <WaitingMark size={20} /> : <ClipboardList size={20} />}
+            </span>
+            <strong>{stats.pendingReview > 0 ? 'Waiting for supervisor feedback' : 'Review your active milestones'}</strong>
+            <p>{stats.pendingReview > 0
+              ? `${stats.pendingReview} project${stats.pendingReview === 1 ? ' is' : 's are'} currently with your supervisor.`
+              : 'Open your project workspace and complete the next assigned task.'}</p>
+            <Link to="/projects">Open projects <ChevronRight size={14} /></Link>
+          </div>
+        </GlassCard>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -119,7 +190,7 @@ export function StudentDashboardPage() {
           ) : (
             <div className="space-y-3">
               {projects.slice(0, 5).map(p => {
-                const cfg = statusLabel[p.Status] || statusLabel.assigned;
+                const cfg = statusLabel[p.Status] || statusLabel.assigned || { text: 'In progress', color: '#2563EB', bg: '#EFF6FF' };
                 const pct = progressPercent(p.Status);
                 return (
                   <Link
@@ -141,8 +212,9 @@ export function StudentDashboardPage() {
                         />
                       </div>
                     </div>
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold shrink-0 hidden sm:inline"
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold shrink-0 hidden sm:inline-flex items-center gap-1"
                       style={{ background: cfg.bg, color: cfg.color }}>
+                      {cfg.waiting && <WaitingMark size={11} />}
                       {cfg.text}
                     </span>
                   </Link>

@@ -1,0 +1,65 @@
+/* One white plate behind the mark, identical on every background. */
+
+.lockup {
+  position: relative;
+  display: inline-grid;
+  justify-items: start;
+  gap: 0.9rem;
+  isolation: isolate;
+  padding: 0;
+}
+
+/* The plate is the wrapper itself, so it always hugs the artwork. */
+.lockup__markwrap {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.12rem 0.2rem;
+  border: 1px solid rgba(9, 60, 43, 0.08);
+  border-radius: 0.55rem;
+  background: #fff;
+  box-shadow: 0 8px 22px rgba(3, 32, 25, 0.16);
+}
+
+.lockup__mark {
+  display: block;
+  object-fit: contain;
+  object-position: left center;
+}
+
+/* Height-driven so the plate hugs the artwork at any size. */
+.lockup--hero .lockup__mark { height: clamp(3.4rem, 5.4vw, 5rem); width: auto; max-width: none; max-height: none; }
+.lockup--bar .lockup__mark { height: clamp(2.1rem, 3vw, 2.6rem); width: auto; max-width: none; max-height: none; }
+
+.lockup--bar .lockup__markwrap { padding: 0.1rem 0.16rem; border-radius: 0.5rem; }
+
+.lockup__caption {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  margin: 0;
+  color: rgba(233, 255, 241, 0.9);
+  font-size: 0.74rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  text-shadow: 0 1px 6px rgba(3, 32, 25, 0.6);
+}
+
+.lockup__caption i {
+  width: 0.3rem;
+  height: 0.3rem;
+  border-radius: 50%;
+  background: #4ade80;
+}
+
+.lockup--center { justify-items: center; }
+.lockup--center .lockup__mark { object-position: center; }
+
+/* On white cards the plate stays, but the lift is softened. */
+.lockup--on-light .lockup__markwrap { box-shadow: 0 2px 8px rgba(3, 32, 25, 0.06); }
+
+@media (max-width: 640px) {
+  .lockup__caption { font-size: 0.64rem; letter-spacing: 0.07em; }
+}

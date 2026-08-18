@@ -241,7 +241,7 @@ export async function analyzeDocument({ fileName, attachmentData, projectTitle, 
       grammarIssues: [],
       missingSections: ['Full text not extracted automatically'],
       plagiarismNote: 'Manual review recommended when text cannot be extracted.',
-      suggestions: ['Convert to PDF or DOCX for deeper AI reading.', 'Ensure the document contains selectable text.'],
+      suggestions: ['Convert to PDF or DOCX for a clearer document review.', 'Ensure the document contains selectable text.'],
     };
   }
 
@@ -379,7 +379,7 @@ export async function analyzeProjectSubmission({ title, abstract, content, descr
 
   if (!isRealAIConfigured()) {
     return {
-      summary: 'Real AI is not configured. Add OPENAI_API_KEY or GEMINI_API_KEY to the server .env file and restart the API. No mock analysis is used.',
+      summary: 'Automated analysis is not configured. Contact the administrator if briefing is required.',
       mainTopic: title || 'Untitled project',
       keyPoints: [],
       objectives: [],
@@ -394,7 +394,7 @@ export async function analyzeProjectSubmission({ title, abstract, content, descr
   }
 
   return {
-    summary: 'Real AI analysis failed. Try again from the project page or check your API keys.',
+    summary: 'Automated analysis failed. Try again from the project page or contact the administrator.',
     mainTopic: mainTopic,
     keyPoints,
     objectives,
@@ -403,7 +403,7 @@ export async function analyzeProjectSubmission({ title, abstract, content, descr
     grammarIssues,
     missingSections,
     plagiarismNote: '',
-    suggestions: ['Re-run AI analysis from the teacher project page'],
+    suggestions: ['Re-run analysis from the teacher project page'],
     realAI: false,
   };
 }

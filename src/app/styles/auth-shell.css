@@ -1,0 +1,465 @@
+/* Split-screen sign-in / sign-up: campus story on one side, the form on the other. */
+
+.authx {
+  --authx-ink: #08231d;
+  --authx-green: #16a34a;
+  --authx-navy: #0f2d5c;
+  --authx-line: #e2ece6;
+  min-height: 100vh;
+  padding: clamp(0.75rem, 2.5vw, 2rem);
+  background:
+    radial-gradient(90% 70% at 12% 0%, #eafaf0 0%, transparent 60%),
+    radial-gradient(80% 60% at 100% 100%, #e8f1fb 0%, transparent 58%),
+    #f6faf7;
+  color: var(--authx-ink);
+}
+
+.authx a { text-decoration: none; }
+
+.authx__frame {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+  gap: clamp(0.75rem, 1.6vw, 1.25rem);
+  width: min(1240px, 100%);
+  min-height: calc(100vh - clamp(1.5rem, 5vw, 4rem));
+  margin: 0 auto;
+}
+
+/* ── Story panel ── */
+.authx__story {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: 1.5rem;
+  overflow: hidden;
+  padding: clamp(1.5rem, 2.6vw, 2.4rem);
+  border-radius: 1.75rem;
+  background: var(--authx-accent);
+  color: #fff;
+  box-shadow: 0 30px 70px rgba(6, 45, 36, 0.22);
+}
+
+.authx__story-bg,
+.authx__story-bg img,
+.authx__story-wash {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.authx__story-bg { z-index: -2; }
+
+.authx__story-bg img {
+  object-fit: cover;
+  animation: authx-pan 26s ease-in-out infinite alternate;
+}
+
+.authx__story-wash {
+  z-index: -1;
+  background: linear-gradient(180deg, rgba(6, 48, 31, .28) 0%, rgba(6, 48, 31, .78) 55%, rgba(4, 32, 21, .92) 100%);
+  opacity: 1;
+}
+
+.authx__story-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.authx__logo .lockup--bar .lockup__mark { height: clamp(2.3rem, 3.2vw, 2.9rem); }
+
+.authx__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.42rem 0.8rem;
+  border: 1px solid rgba(255, 255, 255, 0.32);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16);
+  font-size: 0.7rem;
+  font-weight: 850;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  backdrop-filter: blur(8px);
+}
+
+.authx__story-copy { align-self: center; }
+
+.authx__story-copy h2 {
+  max-width: 20ch;
+  margin: 0;
+  font-size: clamp(1.8rem, 3.2vw, 2.8rem);
+  font-weight: 900;
+  letter-spacing: -0.035em;
+  line-height: 1.06;
+}
+
+.authx__story-copy > p {
+  max-width: 38ch;
+  margin: 0.9rem 0 0;
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 0.95rem;
+  line-height: 1.65;
+}
+
+.authx__story-foot {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.64);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* ── Form panel ── */
+.authx__panel {
+  display: grid;
+  grid-template-rows: auto auto 1fr auto;
+  gap: 1.1rem;
+  padding: clamp(1.35rem, 2.4vw, 2.35rem);
+  border: 1px solid var(--authx-line);
+  border-radius: 1.75rem;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 26px 60px rgba(15, 45, 92, 0.1);
+  backdrop-filter: blur(12px);
+}
+
+.authx__panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.authx__back {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.45rem 0.8rem;
+  border: 1px solid var(--authx-line);
+  border-radius: 999px;
+  color: #37564c;
+  font-size: 0.75rem;
+  font-weight: 800;
+  transition: background 0.2s ease, transform 0.2s ease;
+}
+
+.authx__back:hover { background: #f1f9f4; transform: translateX(-2px); }
+
+.authx__step {
+  padding: 0.4rem 0.7rem;
+  border-radius: 999px;
+  background: #ecfdf3;
+  color: #0b7a45;
+  font-size: 0.7rem;
+  font-weight: 850;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.authx__panel-logo .lockup__mark { height: 2.5rem; }
+
+/* Short forms sit centred; long ones simply grow into the row. */
+.authx__panel-body { align-self: center; width: 100%; }
+
+.authx__panel-foot {
+  margin: 0;
+  color: #7d938a;
+  font-size: 0.7rem;
+  font-weight: 650;
+  text-align: center;
+}
+
+/* ── Form primitives used inside the panel ── */
+.authx__title {
+  margin: 0;
+  font-size: clamp(1.5rem, 2.4vw, 1.95rem);
+  font-weight: 900;
+  letter-spacing: -0.03em;
+}
+
+.authx__subtitle {
+  margin: 0.5rem 0 0;
+  color: #55736a;
+  font-size: 0.88rem;
+  line-height: 1.6;
+}
+
+.authx__form { display: grid; gap: 0.95rem; margin-top: 1.5rem; }
+
+.authx__field { display: grid; gap: 0.35rem; }
+
+.authx__label {
+  color: #2f4f45;
+  font-size: 0.76rem;
+  font-weight: 850;
+  letter-spacing: 0.02em;
+}
+
+.authx__input {
+  width: 100%;
+  min-height: 3.1rem;
+  padding: 0.7rem 0.95rem;
+  border: 1.5px solid #dce8e1;
+  border-radius: 0.9rem;
+  background: #fbfefc;
+  color: #08231d;
+  font-size: 0.92rem;
+  font-weight: 650;
+  outline: none;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+}
+
+.authx__input::placeholder { color: #9db3aa; font-weight: 600; }
+
+.authx__input:focus {
+  border-color: var(--authx-green);
+  background: #fff;
+  box-shadow: 0 0 0 4px rgba(22, 163, 74, 0.14);
+}
+
+.authx__input--pill { padding-right: 4.2rem; }
+
+.authx__hint { margin: 0; color: #6d8a80; font-size: 0.72rem; font-weight: 650; }
+
+.authx__reveal {
+  position: absolute;
+  top: 50%;
+  right: 0.6rem;
+  transform: translateY(-50%);
+  padding: 0.35rem 0.55rem;
+  border: 0;
+  border-radius: 0.6rem;
+  background: #eef7f1;
+  color: #0b7a45;
+  font-size: 0.7rem;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.authx__submit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  width: 100%;
+  min-height: 3.2rem;
+  border: 0;
+  border-radius: 0.95rem;
+  background: linear-gradient(120deg, #1cbb5f, #0f8f4c);
+  color: #fff;
+  font-size: 0.92rem;
+  font-weight: 900;
+  cursor: pointer;
+  box-shadow: 0 16px 32px rgba(22, 163, 74, 0.26);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+}
+
+.authx__submit:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 20px 38px rgba(22, 163, 74, 0.34); }
+.authx__submit:disabled { opacity: 0.65; cursor: progress; }
+
+.authx__secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  width: 100%;
+  min-height: 3rem;
+  border: 1.5px solid #d7e7de;
+  border-radius: 0.95rem;
+  background: #fff;
+  color: #0b7a45;
+  font-size: 0.86rem;
+  font-weight: 850;
+  cursor: pointer;
+  transition: background 0.2s ease, transform 0.2s ease;
+}
+
+.authx__secondary:hover { background: #f2fbf5; transform: translateY(-1px); }
+
+.authx__link {
+  border: 0;
+  background: none;
+  color: #0b7a45;
+  font-size: 0.78rem;
+  font-weight: 850;
+  cursor: pointer;
+  padding: 0;
+}
+
+.authx__link:hover { text-decoration: underline; }
+
+.authx__alert {
+  margin: 0;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid #fecaca;
+  border-radius: 0.85rem;
+  background: #fef2f2;
+  color: #b91c1c;
+  font-size: 0.82rem;
+  font-weight: 750;
+}
+
+.authx__note {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.45rem;
+  margin: 0;
+  padding: 0.7rem 0.9rem;
+  border: 1px solid #bbf7d0;
+  border-radius: 0.85rem;
+  background: #f0fdf4;
+  color: #15803d;
+  font-size: 0.78rem;
+  font-weight: 750;
+}
+
+.authx__note--warn {
+  border-color: #fde68a;
+  background: #fffbeb;
+  color: #92400e;
+}
+
+.authx__note--wait {
+  align-items: center;
+  gap: 0.55rem;
+  border-color: #fde3ac;
+  background: linear-gradient(180deg, #fffdf5, #fff7e6);
+  color: #92400e;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+.otp-timer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  margin: 0;
+  padding: 0.6rem 0.9rem;
+  border: 1px solid #fde3ac;
+  border-radius: 0.85rem;
+  background: linear-gradient(180deg, #fffdf5, #fff7e6);
+  color: #92400e;
+  font-size: 0.78rem;
+  font-weight: 750;
+}
+
+.otp-timer strong {
+  font-variant-numeric: tabular-nums;
+  font-weight: 900;
+}
+
+.otp-timer--urgent {
+  border-color: #fbbf24;
+  animation: otp-timer-flash 1.4s ease-in-out infinite;
+}
+
+.otp-timer--dead {
+  border-color: #e6d9fb;
+  background: #f8f5ff;
+  color: #6d28d9;
+}
+
+@keyframes otp-timer-flash {
+  50% { box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.14); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .otp-timer--urgent { animation: none; }
+}
+
+.authx__title--center,
+.authx__subtitle--center { text-align: center; }
+
+.authx__title--center { margin-top: 0.85rem; }
+
+.authx__dev-otp {
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.9rem 1rem;
+  border: 1.5px dashed #f59e0b;
+  border-radius: 0.95rem;
+  background: linear-gradient(180deg, #fffbeb, #fef3c7);
+  text-align: center;
+}
+
+.authx__dev-otp-label {
+  color: #92400e;
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.authx__dev-otp-code {
+  color: #78350f;
+  font-size: 1.85rem;
+  font-weight: 900;
+  letter-spacing: 0.28em;
+  font-variant-numeric: tabular-nums;
+}
+
+.authx__dev-otp-hint {
+  color: #a16207;
+  font-size: 0.72rem;
+  font-weight: 650;
+  line-height: 1.45;
+}
+
+.authx__row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+
+.authx__switchers {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.45rem;
+  margin-top: 1.25rem;
+  padding-top: 1.1rem;
+  border-top: 1px solid var(--authx-line);
+}
+
+.authx__switcher {
+  padding: 0.5rem 0.85rem;
+  border: 1px solid var(--authx-line);
+  border-radius: 999px;
+  background: #fff;
+  color: #37564c;
+  font-size: 0.76rem;
+  font-weight: 800;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.authx__switcher:hover { background: #f1f9f4; border-color: #a7d8bc; }
+
+@keyframes authx-pan {
+  from { transform: scale(1.02) translate3d(0, 0, 0); }
+  to { transform: scale(1.14) translate3d(-1.5%, -2%, 0); }
+}
+
+/* ── Responsive ── */
+@media (max-width: 1020px) {
+  .authx__frame { grid-template-columns: 1fr; min-height: 0; }
+  .authx__story { grid-template-rows: auto auto auto; gap: 1.2rem; }
+  .authx__story-copy h2 { font-size: clamp(1.6rem, 5vw, 2.1rem); }
+}
+
+@media (max-width: 640px) {
+  .authx { padding: 0.6rem; }
+  .authx__story { padding: 1.15rem; border-radius: 1.35rem; }
+  .authx__panel { border-radius: 1.35rem; }
+  .authx__row { grid-template-columns: 1fr; }
+  .authx__story-foot { display: none; }
+}
+
+@media (min-width: 1800px) {
+  .authx__frame { width: min(1560px, 100%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .authx__story-bg img { animation: none; }
+}

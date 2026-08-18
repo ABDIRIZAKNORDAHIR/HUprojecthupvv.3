@@ -1,6 +1,6 @@
-import { useState, useCallback, useEffect } from 'react';
+import { lazy, Suspense, useState, useCallback, useEffect } from 'react';
 
-import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router';
+import { Routes, Route, useNavigate, useLocation } from 'react-router';
 
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -18,44 +18,13 @@ import { MobileNav } from './components/MobileNav';
 
 import { AppShellBackground } from './components/AppShellBackground';
 
-import { RoleHome } from './components/RoleHome';
-
 import { RoleRoute } from './components/RoleRoute';
-
-import { AssignedProjectsPage } from './pages/AssignedProjectsPage';
-
-import { ProjectDetailPage } from './pages/ProjectDetailPage';
-
-import { AdminUsersPage } from './pages/AdminUsersPage';
-
-import { SettingsPage } from './pages/SettingsPage';
-
-import { MyTeamPage } from './pages/MyTeamPage';
-
-import { StudentFeedbackPage } from './pages/StudentFeedbackPage';
-
-import { StudentScoresPage } from './pages/StudentScoresPage';
-
-import { StudentTeacherPage } from './pages/StudentTeacherPage';
-
-import { TeacherDashboard } from './components/TeacherDashboard';
-
-import { AdminDashboard } from './components/AdminDashboard';
-
-import { AdminSystemHealth } from './components/AdminSystemHealth';
-
-import { BatchScanner } from './components/BatchScanner';
-
-import { MessagesHubPage } from './pages/MessagesHubPage';
-import { StudentAICoachPage } from './pages/StudentAICoachPage';
-import { ProjectAtlas } from './components/ProjectAtlas';
-import { TeacherClassAssignmentsPage } from './pages/TeacherClassAssignmentsPage';
-import { StudentClassAssignmentsPage } from './pages/StudentClassAssignmentsPage';
+import { PageLoader } from './components/PageLoader';
+import { WorkspaceNotice } from './components/WorkspaceNotice';
 
 import { useAuth } from './context/AuthContext';
 
 import { api } from './api/client';
-import { usePushNotifications } from './hooks/usePushNotifications';
 import { useRealtimeSocket } from './hooks/useRealtimeSocket';
 
 import type { ViewId } from './types';
@@ -64,6 +33,39 @@ import type { Role } from './components/Sidebar';
 
 import './styles/app-shell.css';
 
+const lazyNamed = <T extends Record<string, unknown>, K extends keyof T>(
+  loader: () => Promise<T>,
+  name: K,
+) => lazy(async () => ({ default: (await loader())[name] as React.ComponentType<any> }));
+
+const RoleHome = lazyNamed(() => import('./components/RoleHome'), 'RoleHome');
+const AssignedProjectsPage = lazyNamed(() => import('./pages/AssignedProjectsPage'), 'AssignedProjectsPage');
+const ProjectDetailPage = lazyNamed(() => import('./pages/ProjectDetailPage'), 'ProjectDetailPage');
+const AdminUsersPage = lazyNamed(() => import('./pages/AdminUsersPage'), 'AdminUsersPage');
+const SettingsPage = lazyNamed(() => import('./pages/SettingsPage'), 'SettingsPage');
+const MyTeamPage = lazyNamed(() => import('./pages/MyTeamPage'), 'MyTeamPage');
+const StudentFeedbackPage = lazyNamed(() => import('./pages/StudentFeedbackPage'), 'StudentFeedbackPage');
+const StudentScoresPage = lazyNamed(() => import('./pages/StudentScoresPage'), 'StudentScoresPage');
+const StudentTeacherPage = lazyNamed(() => import('./pages/StudentTeacherPage'), 'StudentTeacherPage');
+const TeacherStudentsPage = lazyNamed(() => import('./pages/TeacherStudentsPage'), 'TeacherStudentsPage');
+const TeacherDashboard = lazyNamed(() => import('./components/TeacherDashboard'), 'TeacherDashboard');
+const AdminDashboard = lazyNamed(() => import('./components/AdminDashboard'), 'AdminDashboard');
+const AdminSystemHealth = lazyNamed(() => import('./components/AdminSystemHealth'), 'AdminSystemHealth');
+const BatchScanner = lazyNamed(() => import('./components/BatchScanner'), 'BatchScanner');
+const MessagesHubPage = lazyNamed(() => import('./pages/MessagesHubPage'), 'MessagesHubPage');
+const ProjectAtlas = lazyNamed(() => import('./components/ProjectAtlas'), 'ProjectAtlas');
+const TeacherClassAssignmentsPage = lazyNamed(
+  () => import('./pages/TeacherClassAssignmentsPage'),
+  'TeacherClassAssignmentsPage',
+);
+const TeacherAssignmentReviewPage = lazyNamed(
+  () => import('./pages/TeacherAssignmentReviewPage'),
+  'TeacherAssignmentReviewPage',
+);
+const StudentClassAssignmentsPage = lazyNamed(
+  () => import('./pages/StudentClassAssignmentsPage'),
+  'StudentClassAssignmentsPage',
+);
 
 
 const baseViewPaths: Partial<Record<ViewId, string>> = {
@@ -73,8 +75,6 @@ const baseViewPaths: Partial<Record<ViewId, string>> = {
   'ai-queue': '/ai-queue',
 
   submissions: '/submissions',
-
-  collisions: '/collisions',
 
   analytics: '/analytics',
 
@@ -94,8 +94,6 @@ const baseViewPaths: Partial<Record<ViewId, string>> = {
 
   'class-assignments': '/class-assignments',
 
-  'ai-coach': '/ai-coach',
-
   'batch-scanner': '/batch-scanner',
 
   'system-health': '/admin/health',
@@ -108,7 +106,7 @@ const baseViewPaths: Partial<Record<ViewId, string>> = {
 
 function getViewPath(view: ViewId, role: Role): string {
 
-  if (view === 'students') return role === 'admin' ? '/admin/users' : '/submissions';
+  if (view === 'students') return role === 'admin' ? '/admin/users' : '/students';
 
   if (view === 'users') return '/admin/users';
 
@@ -130,6 +128,8 @@ const pathToView = (path: string): ViewId => {
 
   if (path === '/admin/users') return 'students';
 
+  if (path.startsWith('/students')) return 'students';
+
   if (path === '/admin/overview') return 'dashboard';
 
   if (path === '/admin/health') return 'system-health';
@@ -144,8 +144,7 @@ const pathToView = (path: string): ViewId => {
 
   if (path === '/my-teacher') return 'teacher-chat';
   if (path === '/messages') return 'messages';
-  if (path === '/ai-coach') return 'ai-coach';
-  if (path === '/class-assignments') return 'class-assignments';
+  if (path.startsWith('/class-assignments')) return 'class-assignments';
 
   const entry = Object.entries(baseViewPaths).find(([, p]) => p === path);
 
@@ -171,7 +170,7 @@ export function AppShell() {
 
   const [scrolled, setScrolled] = useState(false);
 
-  const [badgeCounts, setBadgeCounts] = useState({ pendingReview: 0, collisions: 0 });
+  const [badgeCounts, setBadgeCounts] = useState({ pendingReview: 0 });
 
 
 
@@ -180,7 +179,6 @@ export function AppShell() {
   const activeView = pathToView(location.pathname);
 
   useRealtimeSocket(Boolean(user));
-  usePushNotifications(Boolean(user));
 
   const handleNavigate = useCallback((view: ViewId) => {
 
@@ -206,9 +204,9 @@ export function AppShell() {
 
     api.getStatsSummary()
 
-      .then(s => setBadgeCounts({ pendingReview: s.pendingReview, collisions: s.collisions }))
+      .then(s => setBadgeCounts({ pendingReview: s.pendingReview }))
 
-      .catch(() => setBadgeCounts({ pendingReview: 0, collisions: 0 }));
+      .catch(() => setBadgeCounts({ pendingReview: 0 }));
 
   }, [user?.UserId, role, location.pathname]);
 
@@ -232,7 +230,12 @@ export function AppShell() {
 
   return (
 
-    <div key={user?.UserId} className="app-shell flex h-screen overflow-hidden" style={{ fontFamily: 'var(--font-sans)' }}>
+    <div
+      key={user?.UserId}
+      className="app-shell flex h-[100dvh] overflow-hidden"
+      data-role={role}
+      style={{ fontFamily: 'var(--font-sans)' }}
+    >
 
       <AppShellBackground />
 
@@ -246,7 +249,7 @@ export function AppShell() {
 
           onToggle={() => setSidebarCollapsed(c => !c)} onNavigate={handleNavigate}
 
-          onLogout={handleLogout} onSettings={() => handleNavigate('settings')} />
+          onLogout={handleLogout} />
 
 
 
@@ -280,6 +283,7 @@ export function AppShell() {
 
                 exit={{ opacity: 0, y: -4 }} transition={{ duration: 0.22 }}>
 
+                <Suspense fallback={<PageLoader label="Opening this page" />}>
                 <Routes>
 
                   <Route path="/" element={<RoleHome />} />
@@ -326,9 +330,9 @@ export function AppShell() {
 
                   } />
 
-                  <Route path="/ai-coach" element={
+                  <Route path="/class-assignments/:assignmentId" element={
 
-                    <RoleRoute allow={['student']}><StudentAICoachPage /></RoleRoute>
+                    <RoleRoute allow={['teacher']}><TeacherAssignmentReviewPage /></RoleRoute>
 
                   } />
 
@@ -342,6 +346,18 @@ export function AppShell() {
 
 
 
+                  <Route path="/students/:studentId" element={
+
+                    <RoleRoute allow={['teacher']}><TeacherStudentsPage /></RoleRoute>
+
+                  } />
+
+                  <Route path="/students" element={
+
+                    <RoleRoute allow={['teacher']}><TeacherStudentsPage /></RoleRoute>
+
+                  } />
+
                   <Route path="/ai-queue" element={
 
                     <RoleRoute allow={['teacher', 'admin']}><TeacherDashboard activeView="ai-queue" /></RoleRoute>
@@ -351,12 +367,6 @@ export function AppShell() {
                   <Route path="/submissions" element={
 
                     <RoleRoute allow={['teacher', 'admin']}><TeacherDashboard activeView="submissions" /></RoleRoute>
-
-                  } />
-
-                  <Route path="/collisions" element={
-
-                    <RoleRoute allow={['teacher', 'admin']}><TeacherDashboard activeView="collisions" /></RoleRoute>
 
                   } />
 
@@ -394,9 +404,10 @@ export function AppShell() {
 
 
 
-                  <Route path="*" element={<Navigate to="/" replace />} />
+                  <Route path="*" element={<WorkspaceNotice kind="missing" />} />
 
                 </Routes>
+                </Suspense>
 
               </motion.div>
 

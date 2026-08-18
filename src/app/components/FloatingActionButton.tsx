@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Sparkles, Scan, FileSearch, Plus, X, AlertTriangle } from "lucide-react";
+import { ClipboardList, Scan, FileSearch, Plus, X } from "lucide-react";
 import { useNavigate } from "react-router";
-import { HU_BRAND_GREEN } from "../config/appImages";
+import { ROLE_THEME, roleActiveGradient } from "../config/brandTheme";
 
 interface FloatingActionButtonProps {
   role: "student" | "teacher" | "admin";
@@ -11,20 +11,20 @@ interface FloatingActionButtonProps {
 export function FloatingActionButton({ role }: FloatingActionButtonProps) {
   const navigate = useNavigate();
   const [expanded, setExpanded] = useState(false);
+  const theme = ROLE_THEME[role];
 
   const studentActions = [
-    { icon: FileSearch, label: "Check Topic", color: HU_BRAND_GREEN, path: "/atlas" },
-    { icon: Plus, label: "My Projects", color: "#2563EB", path: "/projects" },
+    { icon: FileSearch, label: "Check topic", color: theme.accent, path: "/atlas" },
+    { icon: Plus, label: "My projects", color: theme.dark, path: "/projects" },
   ];
   const teacherActions = [
-    { icon: Sparkles, label: "AI Review", color: HU_BRAND_GREEN, path: "/ai-queue" },
-    { icon: AlertTriangle, label: "Collisions", color: "#EAB308", path: "/collisions" },
-    { icon: FileSearch, label: "Submissions", color: "#38BDF8", path: "/submissions" },
+    { icon: ClipboardList, label: "Review queue", color: theme.accent, path: "/ai-queue" },
+    { icon: FileSearch, label: "Submissions", color: theme.secondary, path: "/submissions" },
   ];
   const adminActions = [
-    { icon: Sparkles, label: "AI Review", color: HU_BRAND_GREEN, path: "/ai-queue" },
-    { icon: Scan, label: "Batch Scan", color: "#2563EB", path: "/batch-scanner" },
-    { icon: FileSearch, label: "All Users", color: "#7C3AED", path: "/admin/users" },
+    { icon: ClipboardList, label: "Review queue", color: theme.secondary, path: "/ai-queue" },
+    { icon: Scan, label: "Originality scan", color: theme.accent, path: "/batch-scanner" },
+    { icon: FileSearch, label: "All users", color: theme.dark, path: "/admin/users" },
   ];
 
   const actions = role === "student" ? studentActions : role === "admin" ? adminActions : teacherActions;
@@ -57,8 +57,8 @@ export function FloatingActionButton({ role }: FloatingActionButtonProps) {
       <motion.button onClick={() => setExpanded(!expanded)} whileHover={{ scale: 1.08 }} whileTap={{ scale: 0.95 }}
         animate={{ rotate: expanded ? 45 : 0 }}
         className="w-14 h-14 rounded-full flex items-center justify-center shadow-xl text-white"
-        style={{ background: `linear-gradient(135deg, ${HU_BRAND_GREEN}, #2563EB)` }}>
-        {expanded ? <X size={22} /> : <Sparkles size={22} />}
+        style={{ background: roleActiveGradient(role) }}>
+        {expanded ? <X size={22} /> : <Plus size={22} />}
       </motion.button>
     </div>
   );

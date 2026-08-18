@@ -238,8 +238,9 @@ export function translateForPostgres(sql) {
 
   q = translateMergeSettings(q, 'postgres');
 
+  // T-SQL conditional insert → Postgres upsert (allow newlines/extra spaces)
   q = q.replace(
-    /IF NOT EXISTS \(SELECT 1 FROM ConversationMembers WHERE ConversationId = @cid AND UserId = @uid\)\s+INSERT INTO ConversationMembers \(ConversationId, UserId\) VALUES \(@cid, @uid\)/gi,
+    /IF\s+NOT\s+EXISTS\s*\(\s*SELECT\s+1\s+FROM\s+ConversationMembers\s+WHERE\s+ConversationId\s*=\s*@cid\s+AND\s+UserId\s*=\s*@uid\s*\)\s*INSERT\s+INTO\s+ConversationMembers\s*\(\s*ConversationId\s*,\s*UserId\s*\)\s*VALUES\s*\(\s*@cid\s*,\s*@uid\s*\)/gi,
     'INSERT INTO ConversationMembers (ConversationId, UserId) VALUES (@cid, @uid) ON CONFLICT (ConversationId, UserId) DO NOTHING'
   );
 
@@ -260,8 +261,9 @@ export function translateForMySQL(sql) {
 
   q = translateMergeSettings(q, 'mysql');
 
+  // T-SQL conditional insert → MySQL INSERT IGNORE (allow newlines/extra spaces)
   q = q.replace(
-    /IF NOT EXISTS \(SELECT 1 FROM ConversationMembers WHERE ConversationId = @cid AND UserId = @uid\)\s+INSERT INTO ConversationMembers \(ConversationId, UserId\) VALUES \(@cid, @uid\)/gi,
+    /IF\s+NOT\s+EXISTS\s*\(\s*SELECT\s+1\s+FROM\s+ConversationMembers\s+WHERE\s+ConversationId\s*=\s*@cid\s+AND\s+UserId\s*=\s*@uid\s*\)\s*INSERT\s+INTO\s+ConversationMembers\s*\(\s*ConversationId\s*,\s*UserId\s*\)\s*VALUES\s*\(\s*@cid\s*,\s*@uid\s*\)/gi,
     'INSERT IGNORE INTO ConversationMembers (ConversationId, UserId) VALUES (@cid, @uid)'
   );
 

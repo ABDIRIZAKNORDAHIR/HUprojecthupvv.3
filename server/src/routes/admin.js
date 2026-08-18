@@ -1,10 +1,13 @@
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import { query } from '../db.js';
+import { sendError } from '../utils/httpError.js';
 import { authMiddleware, attachUserDetails, requireRole } from '../middleware/auth.js';
 import { permanentlyDeleteUser } from '../services/deleteUser.js';
 import { validateUniversityId, normalizeUniversityId } from '../utils/universityId.js';
+import { normalizeIdentity } from '../utils/identity.js';
 import { batchAnalyzeSubmissions } from '../services/athena.js';
+import { writeAuditLog } from '../services/audit.js';
 
 const router = Router();
 router.use(authMiddleware, attachUserDetails, requireRole('admin'));
@@ -13,7 +16,7 @@ router.get('/users', async (req, res) => {
   try {
     const { role, q } = req.query;
     let sql = `SELECT UserId, UniversityId, Email, FirstName, LastName, Role, Department, Specialty,
-             PlainPassword, IsActive, AccountStatus, CreatedAt, LastLoginAt, LastSeenAt,
+             IsActive, AccountStatus, CreatedAt, LastLoginAt, LastSeenAt, ProfileImageUrl,
              CASE WHEN LastSeenAt >= DATEADD(MINUTE, -5, SYSUTCDATETIME()) THEN 1 ELSE 0 END AS IsOnline
              FROM Users`;
     const params = {};
@@ -44,7 +47,23 @@ router.get('/users', async (req, res) => {
     const result = await query(sql, params);
     res.json({ users: result.recordset });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, err);
+  }
+});
+
+router.get('/audit-logs', async (_req, res) => {
+  try {
+    const result = await query(
+      `SELECT TOP 100 a.AuditLogId, a.Action, a.EntityType, a.EntityId,
+              a.MetadataJson, a.IpAddress, a.CreatedAt,
+              u.FirstName, u.LastName, u.Role
+       FROM AuditLogs a
+       LEFT JOIN Users u ON u.UserId = a.ActorUserId
+       ORDER BY a.CreatedAt DESC`
+    );
+    res.json({ logs: result.recordset });
+  } catch (err) {
+    res.status(500).json({ error: 'Could not load audit activity' });
   }
 });
 
@@ -67,7 +86,7 @@ router.get('/stats', async (req, res) => {
       pendingAccounts: pendingAccounts.recordset[0]?.Total || 0,
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, err);
   }
 });
 
@@ -130,7 +149,7 @@ router.get('/live', async (req, res) => {
       recentActivity: recentActivity.recordset.slice(0, 20),
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, err);
   }
 });
 
@@ -178,7 +197,7 @@ router.get('/connections', async (req, res) => {
       teamMembers: teamMembers.recordset,
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, err);
   }
 });
 
@@ -186,13 +205,13 @@ router.get('/connections', async (req, res) => {
 router.get('/pending-registrations', async (req, res) => {
   try {
     const result = await query(
-      `SELECT UserId, UniversityId, Email, PlainPassword, FirstName, LastName, Role, Department, CreatedAt
+      `SELECT UserId, UniversityId, Email, FirstName, LastName, Role, Department, CreatedAt
        FROM Users WHERE AccountStatus = 'pending'
        ORDER BY CreatedAt DESC`
     );
     res.json({ pending: result.recordset });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, err);
   }
 });
 
@@ -229,12 +248,20 @@ router.post('/accounts/:userId/approve', async (req, res) => {
       }
     );
 
+    await writeAuditLog({
+      req,
+      actorUserId: req.user.userId,
+      action: 'account.approve',
+      entityType: 'user',
+      entityId: targetId,
+      metadata: { role: user.Role, universityId: user.UniversityId },
+    });
     res.json({
       message: `${user.FirstName} ${user.LastName} (${user.UniversityId}) has been approved and can now sign in.`,
       user: { ...user, AccountStatus: 'approved', IsActive: true },
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, err);
   }
 });
 
@@ -261,6 +288,14 @@ router.post('/accounts/:userId/reject', async (req, res) => {
     const deleted = await permanentlyDeleteUser(targetId, user.Role);
     if (!deleted) return res.status(500).json({ error: 'Failed to reject account' });
 
+    await writeAuditLog({
+      req,
+      actorUserId: req.user.userId,
+      action: 'account.reject',
+      entityType: 'user',
+      entityId: targetId,
+      metadata: { role: user.Role, universityId: user.UniversityId, reason: reason || null },
+    });
     res.json({
       message: `${user.FirstName} ${user.LastName} (${user.UniversityId}) was rejected and permanently removed.${reason ? ` Reason: ${reason}` : ''}`,
       deletedUser: {
@@ -271,7 +306,7 @@ router.post('/accounts/:userId/reject', async (req, res) => {
       },
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, err);
   }
 });
 
@@ -308,6 +343,14 @@ router.delete('/users/:userId', async (req, res) => {
       return res.status(500).json({ error: 'Failed to delete user' });
     }
 
+    await writeAuditLog({
+      req,
+      actorUserId: req.user.userId,
+      action: 'account.delete',
+      entityType: 'user',
+      entityId: targetId,
+      metadata: { role: user.Role, universityId: user.UniversityId },
+    });
     res.json({
       message: `${user.FirstName} ${user.LastName} (${user.UniversityId}) has been permanently deleted`,
       deletedUser: {
@@ -318,17 +361,17 @@ router.delete('/users/:userId', async (req, res) => {
       },
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, err);
   }
 });
 
-/** Admin updates student/teacher University ID and/or password (not email) */
+/** Admin updates student/teacher University ID, email, and/or password */
 router.put('/users/:userId/account', async (req, res) => {
   try {
     const targetId = parseInt(req.params.userId, 10);
-    const { universityId, password } = req.body;
-    if (!universityId && !password) {
-      return res.status(400).json({ error: 'Provide a new University ID and/or password' });
+    const { universityId, email, password } = req.body;
+    if (!universityId && !email && !password) {
+      return res.status(400).json({ error: 'Provide a University ID, email, and/or password' });
     }
 
     const target = await query(
@@ -344,19 +387,42 @@ router.put('/users/:userId/account', async (req, res) => {
 
     const updates = [];
     const params = { userId: targetId };
+    let universityIdChanged = false;
+    let emailChanged = false;
+    let passwordResetByAdmin = false;
 
     if (universityId) {
       const idCheck = validateUniversityId(universityId);
       if (!idCheck.ok) return res.status(400).json({ error: idCheck.error });
-      const dup = await query(
-        'SELECT UserId FROM Users WHERE UniversityId = @universityId AND UserId <> @userId',
-        { universityId: idCheck.id, userId: targetId }
-      );
-      if (dup.recordset.length) {
-        return res.status(409).json({ error: 'That University ID is already in use' });
+      if (idCheck.id !== user.UniversityId) {
+        const dup = await query(
+          'SELECT UserId FROM Users WHERE UniversityId = @universityId AND UserId <> @userId',
+          { universityId: idCheck.id, userId: targetId }
+        );
+        if (dup.recordset.length) {
+          return res.status(409).json({ error: 'That University ID is already in use' });
+        }
+        params.universityId = idCheck.id;
+        updates.push('UniversityId = @universityId');
+        universityIdChanged = true;
       }
-      params.universityId = idCheck.id;
-      updates.push('UniversityId = @universityId');
+    }
+
+    if (email) {
+      const identity = normalizeIdentity(email);
+      if (!identity.ok) return res.status(400).json({ error: identity.error });
+      if (identity.value !== String(user.Email || '').toLowerCase()) {
+        const dup = await query(
+          'SELECT UserId FROM Users WHERE LOWER(Email) = @email AND UserId <> @userId',
+          { email: identity.value, userId: targetId }
+        );
+        if (dup.recordset.length) {
+          return res.status(409).json({ error: 'That email is already in use' });
+        }
+        params.email = identity.value;
+        updates.push('Email = @email');
+        emailChanged = true;
+      }
     }
 
     if (password) {
@@ -364,25 +430,44 @@ router.put('/users/:userId/account', async (req, res) => {
         return res.status(400).json({ error: 'Password must be at least 8 characters' });
       }
       params.passwordHash = await bcrypt.hash(password, 12);
-      params.plain = password;
-      updates.push('PasswordHash = @passwordHash', 'PlainPassword = @plain');
+      updates.push('PasswordHash = @passwordHash');
+      passwordResetByAdmin = true;
+    }
+
+    if (!updates.length) {
+      return res.json({
+        message: `No changes needed for ${user.FirstName} ${user.LastName}`,
+        user,
+      });
     }
 
     updates.push('UpdatedAt = SYSUTCDATETIME()');
     await query(`UPDATE Users SET ${updates.join(', ')} WHERE UserId = @userId`, params);
 
     const updated = await query(
-      `SELECT UserId, UniversityId, Email, PlainPassword, FirstName, LastName, Role, Department, AccountStatus
+      `SELECT UserId, UniversityId, Email, FirstName, LastName, Role, Department, AccountStatus
        FROM Users WHERE UserId = @userId`,
       { userId: targetId }
     );
 
+    await writeAuditLog({
+      req,
+      actorUserId: req.user.userId,
+      action: 'account.update',
+      entityType: 'user',
+      entityId: targetId,
+      metadata: {
+        universityIdChanged,
+        emailChanged,
+        passwordResetByAdmin,
+      },
+    });
     res.json({
-      message: `Updated ${user.FirstName} ${user.LastName}'s account`,
+      message: `Saved ${user.FirstName} ${user.LastName}'s account`,
       user: updated.recordset[0],
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, err);
   }
 });
 
@@ -409,7 +494,7 @@ router.get('/charts', async (req, res) => {
       studentsByDepartment: deptStudents.recordset,
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, err);
   }
 });
 
@@ -432,8 +517,10 @@ router.post('/batch-scan', async (req, res) => {
 
     const rows = await query(
       `SELECT p.ProjectId, p.TeacherAssignedId, p.Title, p.Abstract, p.Status,
-              p.OwnerStudentId,
+              p.OwnerStudentId, p.AssignedAt, p.SubmittedAt,
               s.FirstName + ' ' + s.LastName AS StudentName,
+              s.UniversityId AS StudentUniversityId,
+              s.Department, s.ClassName, s.StudyMode, s.ProfileImageUrl,
               sub.SubmissionId
        FROM Projects p
        LEFT JOIN Users s ON p.OwnerStudentId = s.UserId
@@ -473,6 +560,15 @@ router.post('/batch-scan', async (req, res) => {
         abstract: r.Abstract || '',
         studentName: r.StudentName || 'Unknown',
         teacherAssignedId: r.TeacherAssignedId,
+        ownerStudentId: r.OwnerStudentId,
+        assignedAt: r.AssignedAt,
+        submittedAt: r.SubmittedAt,
+        universityId: r.StudentUniversityId || '',
+        department: r.Department || '',
+        className: r.ClassName || '',
+        studyMode: r.StudyMode || '',
+        photo: r.ProfileImageUrl || null,
+        status: r.Status || '',
       });
     }
 
@@ -481,7 +577,13 @@ router.post('/batch-scan', async (req, res) => {
     }
 
     const allProjects = await query(
-      `SELECT ProjectId, TeacherAssignedId, Title, Abstract, Status FROM Projects`
+      `SELECT p.ProjectId, p.TeacherAssignedId, p.Title, p.Abstract, p.Status,
+              p.OwnerStudentId, p.AssignedAt, p.SubmittedAt,
+              s.FirstName + ' ' + s.LastName AS StudentName,
+              s.UniversityId AS StudentUniversityId,
+              s.Department, s.ClassName, s.StudyMode, s.ProfileImageUrl
+       FROM Projects p
+       LEFT JOIN Users s ON p.OwnerStudentId = s.UserId`
     );
     const settings = await query(`SELECT SettingValue FROM Settings WHERE SettingKey = 'ai_similarity_threshold'`);
     const threshold = parseInt(settings.recordset[0]?.SettingValue || '60', 10);
@@ -519,7 +621,7 @@ router.post('/batch-scan', async (req, res) => {
     }
 
     res.json({
-      message: `Athena scanned ${results.length} submission(s) against the full project database`,
+      message: `Identified original owners for ${results.length} submission(s) by topic, not by who submitted a second earlier`,
       results: results.map(r => ({
         projectId: r.projectId,
         student: r.studentName,
@@ -529,10 +631,19 @@ router.post('/batch-scan', async (req, res) => {
         collidesWith: r.collidesWith,
         action: r.action,
         aiSuggestion: r.aiSuggestion,
+        isOriginal: r.isOriginal,
+        universityId: r.universityId || '',
+        department: r.department || '',
+        className: r.className || '',
+        studyMode: r.studyMode || '',
+        photo: r.photo || null,
+        assignedAt: r.assignedAt || null,
+        originalOwner: r.originalOwner || null,
+        laterCopies: r.laterCopies || [],
       })),
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, err);
   }
 });
 

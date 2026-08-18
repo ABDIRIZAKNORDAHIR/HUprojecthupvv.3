@@ -1,53 +1,70 @@
 import { useState } from 'react';
-import { motion } from 'motion/react';
-import { GraduationCap, UserPlus, BookOpen, Briefcase, Mail, ShieldCheck } from 'lucide-react';
-import { Link, useNavigate, useSearchParams } from 'react-router';
+import { AnimatePresence, motion } from 'motion/react';
+import { Mail, ShieldCheck, UserPlus } from 'lucide-react';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../api/client';
 import { validateUniversityId, UNIVERSITY_ID_HINT, formatUniversityId } from '../utils/universityId';
-import { AuthLayout } from '../components/BrandBackground';
-import { AuthPortalLinks } from '../components/AuthPageShell';
-import '../styles/welcome.css';
-import { BrandLogo } from '../components/BrandLogo';
-import { HU_BRAND_GREEN, HU_BRAND_GREEN_BRIGHT } from '../config/appImages';
+import { AuthShell } from '../components/AuthShell';
+import { DevOtpReveal } from '../components/DevOtpReveal';
+import { OtpBoxes } from '../components/OtpBoxes';
+import { OtpCountdown } from '../components/OtpCountdown';
+import { WaitingMedallion } from '../components/WaitingIcon';
 
 type AccountRole = 'student' | 'teacher';
-type Step = 'identity' | 'otp' | 'details';
+type Step = 'email' | 'otp' | 'details';
 
 export function RegisterPage() {
   const { register } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const location = useLocation();
   const roleParam = searchParams.get('role');
-  const accountRole: AccountRole = roleParam === 'teacher' ? 'teacher' : 'student';
-  const [step, setStep] = useState<Step>('identity');
+  const accountRole: AccountRole =
+    roleParam === 'teacher' || location.pathname.endsWith('/register/teacher') ? 'teacher' : 'student';
+  const fieldId = (name: string) => `${accountRole}-register-${name}`;
+
+  const [step, setStep] = useState<Step>('email');
   const [form, setForm] = useState({
-    universityId: '', email: '', password: '', confirmPassword: '',
+    universityId: '', password: '', confirmPassword: '',
     firstName: '', lastName: '', department: '',
     className: '', studyMode: 'full_time' as 'full_time' | 'part_time',
     otp: '',
   });
+  const [email, setEmail] = useState('');
+  const [verifiedEmail, setVerifiedEmail] = useState('');
   const [registrationToken, setRegistrationToken] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [pendingMessage, setPendingMessage] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [delivery, setDelivery] = useState<{ to: string; notice?: string | null; devCode?: string | null } | null>(null);
+  const [codeExpiresAt, setCodeExpiresAt] = useState(0);
+  const [codeExpired, setCodeExpired] = useState(false);
 
-  const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }));
-  const RoleIcon = accountRole === 'teacher' ? Briefcase : BookOpen;
+  const set = (key: string, value: string) => setForm(f => ({ ...f, [key]: value }));
 
-  const sendOtp = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const requestCode = async (event?: React.FormEvent) => {
+    event?.preventDefault();
     const idCheck = validateUniversityId(form.universityId);
     if (!idCheck.ok) return setError(idCheck.error);
-    if (!form.email.trim()) return setError('Email is required');
+    const address = email.trim().toLowerCase();
+    if (!address) return setError('Enter your email address');
+
     setError('');
     setLoading(true);
     try {
-      await api.requestRegisterOtp({
+      const res = await api.requestRegisterOtp({
         universityId: idCheck.id,
-        email: form.email.trim(),
+        email: address,
         role: accountRole,
       });
+      setVerifiedEmail(res.identity);
+      setDelivery({ to: res.deliveredTo, notice: res.notice, devCode: res.devCode });
+      if (res.devCode) set('otp', res.devCode);
+      // Mirror the server TTL so the form stops accepting a code the API will reject.
+      setCodeExpiresAt(Date.now() + Math.max(1, res.expiresInMinutes) * 60_000);
+      setCodeExpired(false);
       setStep('otp');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to send code');
@@ -56,16 +73,14 @@ export function RegisterPage() {
     }
   };
 
-  const confirmOtp = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const confirmOtp = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (codeExpired) return setError('That code expired. Use “Resend code” to get a new one.');
     if (!/^\d{6}$/.test(form.otp.trim())) return setError('Enter the 6-digit code');
     setError('');
     setLoading(true);
     try {
-      const res = await api.verifyRegisterOtp({
-        email: form.email.trim(),
-        code: form.otp.trim(),
-      });
+      const res = await api.verifyRegisterOtp({ email: verifiedEmail, code: form.otp.trim() });
       setRegistrationToken(res.registrationToken);
       set('universityId', res.universityId);
       setStep('details');
@@ -76,18 +91,19 @@ export function RegisterPage() {
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
     if (!registrationToken) return setError('Verify your email first');
     if (form.password !== form.confirmPassword) return setError('Passwords do not match');
     const idCheck = validateUniversityId(form.universityId);
     if (!idCheck.ok) return setError(idCheck.error);
+
     setError('');
     setLoading(true);
     try {
       const result = await register({
         universityId: idCheck.id,
-        email: form.email,
+        email: verifiedEmail,
         password: form.password,
         firstName: form.firstName,
         lastName: form.lastName,
@@ -110,220 +126,209 @@ export function RegisterPage() {
     }
   };
 
+  const errorBlock = error ? <p className="authx__alert" role="alert">{error}</p> : null;
+  const stepLabel = step === 'email' ? 'Step 1 of 3' : step === 'otp' ? 'Step 2 of 3' : 'Step 3 of 3';
+
   if (pendingMessage) {
     return (
-      <AuthLayout>
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="auth-card auth-card--portal text-center">
-          <div className="auth-card-accent" />
-          <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 text-2xl" style={{ background: '#f0fdf4', color: HU_BRAND_GREEN }}>
-            ⏳
+      <AuthShell role={accountRole}>
+        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}>
+          <WaitingMedallion role={accountRole} caption={accountRole} />
+          <h1 className="authx__title authx__title--center">Waiting for approval</h1>
+          <p className="authx__subtitle authx__subtitle--center">{pendingMessage}</p>
+          <div className="authx__form">
+            <Link className="authx__submit" to={`/login/${accountRole}`}>Go to sign in</Link>
           </div>
-          <h1 className="text-xl font-extrabold text-black">Pending</h1>
-          <p className="welcome-body text-sm mt-3">{pendingMessage}</p>
-          <Link
-            to={accountRole === 'teacher' ? '/teacher' : '/student'}
-            className="inline-flex items-center justify-center gap-2 mt-6 px-6 py-3 rounded-xl text-white font-semibold text-sm"
-            style={{ background: HU_BRAND_GREEN }}
-          >
-            Sign in
-          </Link>
         </motion.div>
-      </AuthLayout>
+      </AuthShell>
     );
   }
 
   return (
-    <AuthLayout wide>
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="auth-card auth-card--portal">
-        <div className="auth-card-accent" />
+    <AuthShell role={accountRole} step={stepLabel}>
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={step}
+          initial={{ opacity: 0, y: 14 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -10 }}
+          transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+        >
+          {step === 'email' && (
+            <>
+              <h1 className="authx__title">Create your {accountRole} account</h1>
+              <p className="authx__subtitle">
+                {accountRole === 'teacher'
+                  ? 'Register with your HU ID, confirm the emailed code, then wait for staff approval before you open the review queue.'
+                  : 'Register with your HU ID, confirm the emailed code, then start proposing projects to your teacher.'}
+              </p>
 
-        <div className="mb-5">
-          <BrandLogo variant="full" />
-        </div>
+              <form onSubmit={requestCode} className="authx__form">
+                <input type="text" name="website" tabIndex={-1} autoComplete="off" aria-hidden="true" className="absolute -left-[9999px] h-0 w-0 opacity-0" defaultValue="" />
 
-        <div className="flex items-center gap-3 mb-2">
-          <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ background: HU_BRAND_GREEN }}>
-            <GraduationCap size={24} className="text-white" />
-          </div>
-          <div>
-            <h1 className="text-xl font-extrabold text-black">Register</h1>
-            <p className="welcome-body text-xs">
-              {accountRole === 'student' ? 'Student' : 'Teacher'}
-              {' · '}
-              {step === 'identity' ? '1/3 Email' : step === 'otp' ? '2/3 OTP' : '3/3 Details'}
-            </p>
-          </div>
-        </div>
-
-        <div className="auth-role-badge inline-flex items-center gap-2 mb-5 mt-3">
-          <RoleIcon size={14} />
-          {accountRole === 'student' ? 'Student' : 'Teacher'}
-        </div>
-
-        {step === 'identity' && (
-          <form onSubmit={sendOtp} className="space-y-3">
-            <div>
-              <label className="auth-label">University ID</label>
-              <input
-                value={form.universityId}
-                onChange={e => set('universityId', e.target.value)}
-                placeholder="HU000-1234"
-                required
-                className="auth-input font-mono"
-              />
-              <p className="welcome-body text-[11px] mt-1">{UNIVERSITY_ID_HINT}</p>
-              {form.universityId && validateUniversityId(form.universityId).ok && (
-                <p className="text-[11px] mt-0.5 font-mono font-semibold" style={{ color: HU_BRAND_GREEN }}>
-                  {formatUniversityId(form.universityId)}
-                </p>
-              )}
-            </div>
-            <div>
-              <label className="auth-label">Email</label>
-              <input type="email" value={form.email} onChange={e => set('email', e.target.value)} required className="auth-input" />
-            </div>
-            {error && <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-xl">{error}</p>}
-            <motion.button type="submit" disabled={loading} whileHover={{ scale: 1.01 }} className="auth-submit" style={{ background: HU_BRAND_GREEN }}>
-              <Mail size={18} />
-              {loading ? 'Sending…' : 'Send OTP'}
-            </motion.button>
-          </form>
-        )}
-
-        {step === 'otp' && (
-          <form onSubmit={confirmOtp} className="space-y-3">
-            <p className="welcome-body text-sm">Code sent to <strong>{form.email}</strong></p>
-            <div>
-              <label className="auth-label">OTP</label>
-              <input
-                value={form.otp}
-                onChange={e => set('otp', e.target.value.replace(/\D/g, '').slice(0, 6))}
-                placeholder="6-digit code"
-                inputMode="numeric"
-                required
-                className="auth-input font-mono tracking-widest text-center text-lg"
-              />
-            </div>
-            {error && <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-xl">{error}</p>}
-            <motion.button type="submit" disabled={loading} whileHover={{ scale: 1.01 }} className="auth-submit" style={{ background: HU_BRAND_GREEN }}>
-              <ShieldCheck size={18} />
-              {loading ? 'Checking…' : 'Verify'}
-            </motion.button>
-            <button
-              type="button"
-              disabled={loading}
-              className="w-full text-sm font-semibold"
-              style={{ color: HU_BRAND_GREEN }}
-              onClick={async () => {
-                setError('');
-                setLoading(true);
-                try {
-                  const idCheck = validateUniversityId(form.universityId);
-                  if (!idCheck.ok) throw new Error(idCheck.error);
-                  await api.requestRegisterOtp({
-                    universityId: idCheck.id,
-                    email: form.email.trim(),
-                    role: accountRole,
-                  });
-                } catch (err) {
-                  setError(err instanceof Error ? err.message : 'Failed to resend');
-                } finally {
-                  setLoading(false);
-                }
-              }}
-            >
-              Resend code
-            </button>
-            <button
-              type="button"
-              className="w-full text-sm font-semibold text-gray-500"
-              onClick={() => { setStep('identity'); setError(''); set('otp', ''); }}
-            >
-              Change email
-            </button>
-          </form>
-        )}
-
-        {step === 'details' && (
-          <form onSubmit={handleSubmit} className="space-y-3">
-            <p className="text-xs text-green-700 bg-green-50 px-3 py-2 rounded-lg flex items-center gap-2">
-              <ShieldCheck size={14} /> {form.email} verified
-            </p>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="auth-label">First Name</label>
-                <input value={form.firstName} onChange={e => set('firstName', e.target.value)} required className="auth-input" />
-              </div>
-              <div>
-                <label className="auth-label">Last Name</label>
-                <input value={form.lastName} onChange={e => set('lastName', e.target.value)} required className="auth-input" />
-              </div>
-            </div>
-            <div>
-              <label className="auth-label">Department</label>
-              <input value={form.department} onChange={e => set('department', e.target.value)} className="auth-input" />
-            </div>
-            {accountRole === 'student' && (
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="auth-label">Class (e.g. BIT 9)</label>
+                <div className="authx__field">
+                  <label className="authx__label" htmlFor={fieldId('university-id')}>University ID</label>
                   <input
-                    value={form.className}
-                    onChange={e => set('className', e.target.value)}
-                    placeholder="BIT 9"
+                    id={fieldId('university-id')}
+                    className="authx__input font-mono"
+                    value={form.universityId}
+                    onChange={e => set('universityId', e.target.value)}
+                    placeholder="HU000-1234"
                     required
-                    className="auth-input"
                   />
+                  <p className="authx__hint">{UNIVERSITY_ID_HINT}</p>
+                  {form.universityId && validateUniversityId(form.universityId).ok && (
+                    <p className="authx__hint font-mono" style={{ color: '#0b7a45' }}>
+                      {formatUniversityId(form.universityId)}
+                    </p>
+                  )}
                 </div>
-                <div>
-                  <label className="auth-label">Study mode</label>
-                  <select
-                    value={form.studyMode}
-                    onChange={e => set('studyMode', e.target.value)}
+
+                <div className="authx__field">
+                  <label className="authx__label" htmlFor={fieldId('email')}>Email address</label>
+                  <input
+                    id={fieldId('email')}
+                    type="email"
+                    className="authx__input"
+                    value={email}
+                    onChange={e => setEmail(e.target.value)}
+                    placeholder="you@hu.edu.so"
+                    autoComplete="email"
                     required
-                    className="auth-input"
-                  >
-                    <option value="full_time">Full-time</option>
-                    <option value="part_time">Part-time</option>
-                  </select>
+                  />
+                  <p className="authx__hint">The 6-digit code goes to this inbox.</p>
                 </div>
-              </div>
-            )}
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="auth-label">Password</label>
-                <input type="password" value={form.password} onChange={e => set('password', e.target.value)} minLength={8} required className="auth-input" />
-              </div>
-              <div>
-                <label className="auth-label">Confirm</label>
-                <input type="password" value={form.confirmPassword} onChange={e => set('confirmPassword', e.target.value)} required className="auth-input" />
-              </div>
-            </div>
 
-            {error && <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-xl">{error}</p>}
+                {errorBlock}
+                <button type="submit" className="authx__submit" disabled={loading}>
+                  <Mail size={18} />
+                  {loading ? 'Sending…' : 'Send verification code'}
+                </button>
 
-            <motion.button
-              type="submit"
-              disabled={loading}
-              whileHover={{ scale: 1.01 }}
-              className="auth-submit"
-              style={{ background: HU_BRAND_GREEN }}
-            >
-              <UserPlus size={18} />
-              {loading ? 'Creating…' : `Create ${accountRole} account`}
-            </motion.button>
-          </form>
-        )}
+                <Link to={`/login/${accountRole}`} className="authx__secondary">
+                  I already have an account
+                </Link>
+              </form>
+            </>
+          )}
 
-        <p className="text-center mt-4 welcome-body text-sm">
-          Already registered?{' '}
-          <Link to={accountRole === 'teacher' ? '/teacher' : '/student'} className="font-extrabold hover:underline" style={{ color: HU_BRAND_GREEN_BRIGHT }}>
-            Sign in
-          </Link>
-        </p>
+          {step === 'otp' && (
+            <>
+              <h1 className="authx__title">Enter your code</h1>
+              <p className="authx__subtitle">
+                Sent to <strong>{delivery?.to}</strong>.
+              </p>
 
-        <AuthPortalLinks role={accountRole} />
-      </motion.div>
-    </AuthLayout>
+              <form onSubmit={confirmOtp} className="authx__form">
+                {delivery?.notice && (
+                  <p className="authx__note authx__note--warn" role="status">
+                    <Mail size={14} /> {delivery.notice}
+                  </p>
+                )}
+                <DevOtpReveal code={delivery?.devCode} />
+                <OtpBoxes
+                  id={fieldId('otp')}
+                  value={form.otp}
+                  onChange={value => set('otp', value)}
+                  invalid={!!error}
+                  disabled={loading || codeExpired}
+                />
+                {codeExpiresAt > 0 && (
+                  <OtpCountdown expiresAt={codeExpiresAt} onExpire={() => setCodeExpired(true)} />
+                )}
+                {errorBlock}
+                <button type="submit" className="authx__submit" disabled={loading || codeExpired}>
+                  <ShieldCheck size={18} /> {loading ? 'Checking…' : 'Verify code'}
+                </button>
+                <button type="button" className="authx__link" disabled={loading} onClick={() => requestCode()}>
+                  Resend code
+                </button>
+                <button
+                  type="button"
+                  className="authx__link"
+                  onClick={() => { setStep('email'); setError(''); set('otp', ''); setCodeExpired(false); setCodeExpiresAt(0); }}
+                >
+                  Change email address
+                </button>
+              </form>
+            </>
+          )}
+
+          {step === 'details' && (
+            <>
+              <h1 className="authx__title">Finish your profile</h1>
+              <p className="authx__subtitle">Last step — tell us who you are and choose a password.</p>
+
+              <form onSubmit={handleSubmit} className="authx__form">
+                <p className="authx__note" role="status">
+                  <ShieldCheck size={14} /> {verifiedEmail} verified
+                </p>
+
+                <div className="authx__row">
+                  <div className="authx__field">
+                    <label className="authx__label" htmlFor={fieldId('first-name')}>First name</label>
+                    <input id={fieldId('first-name')} className="authx__input" value={form.firstName} onChange={e => set('firstName', e.target.value)} required />
+                  </div>
+                  <div className="authx__field">
+                    <label className="authx__label" htmlFor={fieldId('last-name')}>Last name</label>
+                    <input id={fieldId('last-name')} className="authx__input" value={form.lastName} onChange={e => set('lastName', e.target.value)} required />
+                  </div>
+                </div>
+
+                <div className="authx__field">
+                  <label className="authx__label" htmlFor={fieldId('department')}>Department</label>
+                  <input id={fieldId('department')} className="authx__input" value={form.department} onChange={e => set('department', e.target.value)} placeholder="Computer Science" />
+                </div>
+
+                {accountRole === 'student' && (
+                  <div className="authx__row">
+                    <div className="authx__field">
+                      <label className="authx__label" htmlFor={fieldId('class')}>Class</label>
+                      <input id={fieldId('class')} className="authx__input" value={form.className} onChange={e => set('className', e.target.value)} placeholder="BIT 9" required />
+                    </div>
+                    <div className="authx__field">
+                      <label className="authx__label" htmlFor={fieldId('study-mode')}>Study mode</label>
+                      <select id={fieldId('study-mode')} className="authx__input" value={form.studyMode} onChange={e => set('studyMode', e.target.value)} required>
+                        <option value="full_time">Full-time</option>
+                        <option value="part_time">Part-time</option>
+                      </select>
+                    </div>
+                  </div>
+                )}
+
+                <div className="authx__row">
+                  <div className="authx__field">
+                    <label className="authx__label" htmlFor={fieldId('password')}>Password</label>
+                    <input id={fieldId('password')} type={showPassword ? 'text' : 'password'} className="authx__input" value={form.password} onChange={e => set('password', e.target.value)} minLength={8} required />
+                  </div>
+                  <div className="authx__field">
+                    <label className="authx__label" htmlFor={fieldId('confirm-password')}>Confirm</label>
+                    <div className="relative">
+                      <input id={fieldId('confirm-password')} type={showPassword ? 'text' : 'password'} className="authx__input authx__input--pill" value={form.confirmPassword} onChange={e => set('confirmPassword', e.target.value)} minLength={8} required />
+                      <button type="button" className="authx__reveal" onClick={() => setShowPassword(v => !v)}>
+                        {showPassword ? 'Hide' : 'Show'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {errorBlock}
+                <button type="submit" className="authx__submit" disabled={loading}>
+                  <UserPlus size={18} /> {loading ? 'Creating…' : `Create ${accountRole} account`}
+                </button>
+              </form>
+            </>
+          )}
+        </motion.div>
+      </AnimatePresence>
+
+      <div className="authx__switchers">
+        <Link className="authx__switcher" to={`/login/${accountRole}`}>Sign in</Link>
+        <Link className="authx__switcher" to={accountRole === 'student' ? '/register/teacher' : '/register/student'}>
+          Register as {accountRole === 'student' ? 'teacher' : 'student'}
+        </Link>
+        <Link className="authx__switcher" to="/">Homepage</Link>
+      </div>
+    </AuthShell>
   );
 }

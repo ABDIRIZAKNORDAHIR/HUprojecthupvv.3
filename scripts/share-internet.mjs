@@ -1,7 +1,4 @@
-/**
- * Share ProjectHub on the internet for FREE via Cloudflare Tunnel.
- * Your PC must stay on. Uses your local SQL Server — no cloud DB needed.
- */
+
 import { spawn, execSync } from 'child_process';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -68,7 +65,7 @@ function startTunnel(bin) {
     if (m) {
       console.log('\n============================================================');
       console.log('  YOUR PUBLIC LINK:', m[0]);
-      console.log('  Login: swilliams@hu.edu / ProjectHub123!  (teacher)');
+      console.log('  Sign in with your own ProjectHub account.');
       console.log('============================================================\n');
     }
   };

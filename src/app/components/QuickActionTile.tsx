@@ -13,7 +13,7 @@ interface QuickActionTileProps {
 }
 
 export function QuickActionTile({
-  to, title, description, icon: Icon, gradient, accent, index = 0,
+  to, title, description, icon: Icon, gradient, accent: _accent, index = 0,
 }: QuickActionTileProps) {
   return (
     <motion.div

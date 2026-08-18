@@ -1,11 +1,13 @@
 import { Router } from 'express';
 import { query } from '../db.js';
+import { sendError } from '../utils/httpError.js';
 import { authMiddleware, attachUserDetails, requireRole } from '../middleware/auth.js';
 import { analyzeSubmission } from '../services/athena.js';
 import { normalizeUniversityId } from '../utils/universityId.js';
 import { ensureTeacherStudentConversation, ensureProjectGroupConversation } from '../services/conversationSetup.js';
 import { runProjectAIAnalysis } from '../services/projectAIService.js';
 import { studentCanAccessProject, upsertProjectInvitation } from '../utils/projectAccess.js';
+import { validateDataUrlAttachment } from '../utils/attachments.js';
 
 const router = Router();
 
@@ -35,7 +37,7 @@ router.get('/teachers', authMiddleware, attachUserDetails, requireRole('student'
     }
     res.json({ teachers, byCategory });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, err);
   }
 });
 
@@ -46,7 +48,7 @@ router.get('/lookup-teacher/:universityId', authMiddleware, attachUserDetails, r
     if (!uid) return res.status(400).json({ error: 'Enter a valid HU000 University ID' });
 
     const teacher = await query(
-      `SELECT UserId, UniversityId, Email, FirstName, LastName, Department, Specialty,
+      `SELECT UserId, UniversityId, Email, FirstName, LastName, Department, Specialty, ProfileImageUrl,
               (SELECT COUNT(*) FROM Projects p WHERE p.AssignedByTeacherId = u.UserId AND p.Status NOT IN ('rejected')) AS ActiveProjects
        FROM Users u
        WHERE u.UniversityId = @uid AND u.Role = 'teacher' AND u.IsActive = 1 AND u.AccountStatus = 'approved'`,
@@ -56,14 +58,22 @@ router.get('/lookup-teacher/:universityId', authMiddleware, attachUserDetails, r
 
     res.json({ teacher: teacher.recordset[0] });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, err);
   }
 });
 
 /** Student proposes a project and assigns it to a teacher */
 router.post('/propose-project', authMiddleware, attachUserDetails, requireRole('student'), async (req, res) => {
   try {
-    const { teacherId, teacherUniversityId, title, abstract, description } = req.body;
+    const {
+      teacherId,
+      teacherUniversityId,
+      title,
+      abstract,
+      description,
+      attachmentName,
+      attachmentData,
+    } = req.body;
     if (!title?.trim()) {
       return res.status(400).json({ error: 'Project title is required' });
     }
@@ -83,6 +93,12 @@ router.post('/propose-project', authMiddleware, attachUserDetails, requireRole('
     if (!resolvedTeacherId) {
       return res.status(400).json({ error: 'Select a teacher or enter their HU ID' });
     }
+
+    const proposalPdf = validateDataUrlAttachment({
+      data: attachmentData,
+      name: attachmentName,
+      allowedMimes: new Set(['application/pdf']),
+    });
 
     const teacher = await query(
       `SELECT UserId, FirstName, LastName, Department, Specialty, UniversityId FROM Users WHERE UserId = @id AND Role = 'teacher' AND IsActive = 1`,
@@ -116,6 +132,22 @@ router.post('/propose-project', authMiddleware, attachUserDetails, requireRole('
     );
 
     const studentName = `${req.userDetails.FirstName} ${req.userDetails.LastName}`;
+    if (proposalPdf) {
+      await query(
+        `INSERT INTO Messages
+           (ProjectId, SenderId, ReceiverId, Content, AttachmentType, AttachmentName, AttachmentData, MessageScope)
+         VALUES
+           (@projectId, @senderId, @receiverId, @content, 'file', @attachmentName, @attachmentData, 'teacher_student')`,
+        {
+          projectId: project.ProjectId,
+          senderId: studentId,
+          receiverId: resolvedTeacherId,
+          content: `Project proposal PDF for "${title.trim()}".`,
+          attachmentName: proposalPdf.name,
+          attachmentData: proposalPdf.data,
+        }
+      );
+    }
     await notify(
       resolvedTeacherId,
       'New Project Assignment Request',
@@ -140,7 +172,7 @@ router.post('/propose-project', authMiddleware, attachUserDetails, requireRole('
     if (err.message?.includes('UQ_Projects')) {
       return res.status(409).json({ error: 'Please try again — duplicate project ID' });
     }
-    res.status(500).json({ error: err.message });
+    sendError(res, err);
   }
 });
 
@@ -151,7 +183,7 @@ router.get('/lookup/:universityId', authMiddleware, attachUserDetails, requireRo
     if (!uid) return res.status(400).json({ error: 'Enter a valid HU000 University ID' });
 
     const student = await query(
-      `SELECT UserId, UniversityId, Email, FirstName, LastName, Department FROM Users
+      `SELECT UserId, UniversityId, Email, FirstName, LastName, Department, ProfileImageUrl FROM Users
        WHERE UniversityId = @uid AND Role = 'student' AND IsActive = 1 AND AccountStatus = 'approved'`,
       { uid }
     );
@@ -170,7 +202,7 @@ router.get('/lookup/:universityId', authMiddleware, attachUserDetails, requireRo
 
     res.json({ student: student.recordset[0], projects: projects.recordset });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, err);
   }
 });
 
@@ -213,7 +245,7 @@ router.post('/invite-member', authMiddleware, attachUserDetails, requireRole('st
       student: invited,
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, err);
   }
 });
 
@@ -234,7 +266,7 @@ router.get('/invitations', async (req, res) => {
     );
     res.json({ invitations: result.recordset });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, err);
   }
 });
 
@@ -260,7 +292,7 @@ router.get('/team', async (req, res) => {
 
     res.json({ team: result.recordset });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, err);
   }
 });
 
@@ -315,7 +347,7 @@ router.get('/dashboard', async (req, res) => {
       },
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, err);
   }
 });
 
@@ -345,7 +377,7 @@ router.get('/notifications', async (req, res) => {
       })),
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, err);
   }
 });
 

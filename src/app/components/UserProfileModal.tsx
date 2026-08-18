@@ -32,6 +32,12 @@ export function UserProfileModal({ profile, currentProjects = [], onClose }: Use
           <div className="flex items-center gap-2 text-gray-600"><Mail size={14} /> {profile.Email}</div>
           {profile.Phone && <div className="flex items-center gap-2 text-gray-600"><Phone size={14} /> {profile.Phone}</div>}
           {profile.Department && <div className="flex items-center gap-2 text-gray-600"><BookOpen size={14} /> {profile.Department}</div>}
+          {profile.ClassName && (
+            <div className="flex items-center gap-2 text-gray-600">
+              <BookOpen size={14} /> Class {profile.ClassName}
+              {profile.StudyMode ? ` · ${profile.StudyMode.replace('_', '-')}` : ''}
+            </div>
+          )}
           {profile.ContactInfo && (
             <div><p className="text-xs font-semibold text-gray-500 mb-1">Contact</p><p className="text-gray-700">{profile.ContactInfo}</p></div>
           )}

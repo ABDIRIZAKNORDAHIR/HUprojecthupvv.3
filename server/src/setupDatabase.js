@@ -1,4 +1,5 @@
 import bcrypt from 'bcryptjs';
+import { getAdminBootstrap } from './config/security.js';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -204,11 +205,18 @@ async function runSetup() {
 
     `UPDATE Users SET AccountStatus = 'approved' WHERE AccountStatus IS NULL OR AccountStatus = ''`,
 
-    `IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.Users') AND name = 'PlainPassword')
-     ALTER TABLE dbo.Users ADD PlainPassword NVARCHAR(255) NULL`,
+    `IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.Users') AND name = 'PlainPassword')
+     BEGIN
+       UPDATE dbo.Users SET PasswordHash = '!RESET_REQUIRED!'
+       WHERE PlainPassword IS NOT NULL AND PlainPassword <> '';
+       ALTER TABLE dbo.Users DROP COLUMN PlainPassword;
+     END`,
 
     `IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.Users') AND name = 'Phone')
      ALTER TABLE dbo.Users ADD Phone NVARCHAR(30) NULL, Bio NVARCHAR(MAX) NULL, ContactInfo NVARCHAR(500) NULL`,
+
+    `IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.Users') AND name = 'ClassName')
+     ALTER TABLE dbo.Users ADD ClassName NVARCHAR(50) NULL, StudyMode NVARCHAR(20) NULL`,
 
     `IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.Messages') AND name = 'MessageScope')
      ALTER TABLE dbo.Messages ADD MessageScope NVARCHAR(30) NOT NULL DEFAULT 'teacher_student'`,
@@ -292,6 +300,93 @@ async function runSetup() {
 
     `IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.DocumentAnalyses') AND name = 'AiMetadata')
      ALTER TABLE dbo.DocumentAnalyses ADD AiMetadata NVARCHAR(MAX) NULL`,
+
+    `IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'EmailOtps')
+     CREATE TABLE dbo.EmailOtps (
+       OtpId INT IDENTITY(1,1) PRIMARY KEY,
+       Email NVARCHAR(255) NOT NULL,
+       Purpose NVARCHAR(40) NOT NULL,
+       CodeHash NVARCHAR(255) NOT NULL,
+       PayloadJson NVARCHAR(MAX) NULL,
+       ExpiresAt DATETIME2 NOT NULL,
+       Attempts INT NOT NULL DEFAULT 0,
+       ConsumedAt DATETIME2 NULL,
+       CreatedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME()
+     )`,
+
+    `IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'AuthActionTokens')
+     CREATE TABLE dbo.AuthActionTokens (
+       Jti NVARCHAR(64) PRIMARY KEY,
+       Purpose NVARCHAR(40) NOT NULL,
+       ConsumedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME()
+     )`,
+
+    `IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'AuditLogs')
+     CREATE TABLE dbo.AuditLogs (
+       AuditLogId BIGINT IDENTITY(1,1) PRIMARY KEY,
+       ActorUserId INT NULL,
+       Action NVARCHAR(80) NOT NULL,
+       EntityType NVARCHAR(80) NULL,
+       EntityId NVARCHAR(80) NULL,
+       MetadataJson NVARCHAR(MAX) NULL,
+       IpAddress NVARCHAR(64) NULL,
+       CreatedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME()
+     )`,
+
+    `IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'ClassAssignments')
+     CREATE TABLE dbo.ClassAssignments (
+       AssignmentId INT IDENTITY(1,1) PRIMARY KEY,
+       TeacherId INT NOT NULL,
+       ClassName NVARCHAR(50) NOT NULL,
+       StudyMode NVARCHAR(20) NULL,
+       Title NVARCHAR(500) NOT NULL,
+       Instructions NVARCHAR(MAX) NULL,
+       OpensAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+       DeadlineAt DATETIME2 NOT NULL,
+       CreatedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+       IsClosed BIT NOT NULL DEFAULT 0,
+       ClosedNotified BIT NOT NULL DEFAULT 0
+     )`,
+
+    `IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'ClassAssignmentSubmissions')
+     CREATE TABLE dbo.ClassAssignmentSubmissions (
+       SubmissionId INT IDENTITY(1,1) PRIMARY KEY,
+       AssignmentId INT NOT NULL,
+       StudentId INT NOT NULL,
+       Content NVARCHAR(MAX) NOT NULL,
+       AttachmentName NVARCHAR(255) NULL,
+       AttachmentData NVARCHAR(MAX) NULL,
+       Score DECIMAL(5,2) NULL,
+       BonusPoints DECIMAL(5,2) NOT NULL DEFAULT 0,
+       TeacherFeedback NVARCHAR(MAX) NULL,
+       GradedAt DATETIME2 NULL,
+       GradedBy INT NULL,
+       SubmittedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+       CONSTRAINT UQ_ClassAssignmentStudent UNIQUE (AssignmentId, StudentId)
+     )`,
+
+    `IF COL_LENGTH('dbo.ClassAssignmentSubmissions', 'Score') IS NULL
+       ALTER TABLE dbo.ClassAssignmentSubmissions ADD Score DECIMAL(5,2) NULL;
+     IF COL_LENGTH('dbo.ClassAssignmentSubmissions', 'BonusPoints') IS NULL
+       ALTER TABLE dbo.ClassAssignmentSubmissions ADD BonusPoints DECIMAL(5,2) NOT NULL
+         CONSTRAINT DF_ClassAssignmentSubmissions_Bonus DEFAULT 0;
+     IF COL_LENGTH('dbo.ClassAssignmentSubmissions', 'TeacherFeedback') IS NULL
+       ALTER TABLE dbo.ClassAssignmentSubmissions ADD TeacherFeedback NVARCHAR(MAX) NULL;
+     IF COL_LENGTH('dbo.ClassAssignmentSubmissions', 'GradedAt') IS NULL
+       ALTER TABLE dbo.ClassAssignmentSubmissions ADD GradedAt DATETIME2 NULL;
+     IF COL_LENGTH('dbo.ClassAssignmentSubmissions', 'GradedBy') IS NULL
+       ALTER TABLE dbo.ClassAssignmentSubmissions ADD GradedBy INT NULL`,
+
+    `IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'PushSubscriptions')
+     CREATE TABLE dbo.PushSubscriptions (
+       SubscriptionId INT IDENTITY(1,1) PRIMARY KEY,
+       UserId INT NOT NULL,
+       Endpoint NVARCHAR(500) NOT NULL UNIQUE,
+       P256dh NVARCHAR(255) NOT NULL,
+       Auth NVARCHAR(255) NOT NULL,
+       UserAgent NVARCHAR(255) NULL,
+       CreatedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME()
+     )`,
   ];
   for (const m of migrations) {
     await pool.request().query(m);
@@ -338,16 +433,17 @@ async function runSetup() {
   // Single admin account — only created if no admin exists
   const adminCheck = await pool.request().query(`SELECT COUNT(*) AS c FROM Users WHERE Role = 'admin'`);
   if (adminCheck.recordset[0].c === 0) {
-    const hash = await bcrypt.hash(process.env.ADMIN_DEFAULT_PASSWORD || 'ProjectHub123!', 12);
+    const admin = getAdminBootstrap();
+    const hash = await bcrypt.hash(admin.password, 12);
     await pool.request()
-      .input('uid', process.env.ADMIN_UNIVERSITY_ID || 'HU0009000')
-      .input('email', process.env.ADMIN_EMAIL || 'admin@hu.edu')
+      .input('uid', admin.universityId)
+      .input('email', admin.email)
       .input('hash', hash)
-      .input('fn', process.env.ADMIN_FIRST_NAME || 'System')
-      .input('ln', process.env.ADMIN_LAST_NAME || 'Administrator')
+      .input('fn', admin.firstName)
+      .input('ln', admin.lastName)
       .query(`INSERT INTO Users (UniversityId, Email, PasswordHash, FirstName, LastName, Role, Department)
               VALUES (@uid, @email, @hash, @fn, @ln, 'admin', 'Administration')`);
-    console.log('[DB Setup] Created single admin account:', process.env.ADMIN_UNIVERSITY_ID || 'HU0009000');
+    console.log('[DB Setup] Created single admin account:', admin.universityId);
   }
 
   await pool.close();

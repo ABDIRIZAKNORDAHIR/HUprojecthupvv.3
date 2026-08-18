@@ -1,18 +1,56 @@
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import { query } from '../db.js';
+import { sendError } from '../utils/httpError.js';
 import { signToken, signOtpGateToken, verifyOtpGateToken, authMiddleware, attachUserDetails } from '../middleware/auth.js';
 import { validateUniversityId } from '../utils/universityId.js';
 import { issueOtp, verifyOtp } from '../services/otp.js';
+import { normalizeIdentity } from '../utils/identity.js';
+import { writeAuditLog } from '../services/audit.js';
+import { rejectBotPayload } from '../middleware/botGuard.js';
+import { validateProfileImageDataUrl } from '../utils/attachments.js';
 
 const router = Router();
+router.use(rejectBotPayload);
+
+async function consumeGateToken(gate) {
+  if (!gate?.jti || !gate?.purpose) {
+    const err = new Error('Invalid verification token. Start again.');
+    err.status = 401;
+    throw err;
+  }
+  try {
+    await query(
+      `INSERT INTO AuthActionTokens (Jti, Purpose) VALUES (@jti, @purpose)`,
+      { jti: gate.jti, purpose: gate.purpose }
+    );
+  } catch (cause) {
+    const duplicate = cause?.code === '23505'
+      || cause?.code === 'ER_DUP_ENTRY'
+      || cause?.number === 2627
+      || cause?.number === 2601;
+    if (!duplicate) throw cause;
+    const err = new Error('This verification has already been used. Start again.');
+    err.status = 401;
+    throw err;
+  }
+}
+
+const OTP_DELIVERY_ERRORS = new Set([
+  'smtp_not_configured',
+  'smtp_send_failed',
+]);
+
+function otpErrorStatus(err) {
+  return err.status || (OTP_DELIVERY_ERRORS.has(err.code) ? 503 : 500);
+}
 
 /** Step 1 — student/teacher: University ID + email → send OTP */
 router.post('/register/request-otp', async (req, res) => {
   try {
-    const { universityId, email, role } = req.body;
-    if (!universityId || !email) {
-      return res.status(400).json({ error: 'University ID and email are required' });
+    const { universityId, identity, email, role } = req.body;
+    if (!universityId) {
+      return res.status(400).json({ error: 'University ID is required' });
     }
     const accountRole = role === 'teacher' ? 'teacher' : 'student';
     if (role === 'admin') {
@@ -21,23 +59,20 @@ router.post('/register/request-otp', async (req, res) => {
     const idCheck = validateUniversityId(universityId);
     if (!idCheck.ok) return res.status(400).json({ error: idCheck.error });
 
-    const normalizedEmail = String(email).toLowerCase().trim();
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
-      return res.status(400).json({ error: 'Enter a valid email address' });
-    }
+    const who = normalizeIdentity(identity ?? email);
+    if (!who.ok) return res.status(400).json({ error: who.error });
 
     const existing = await query(
       `SELECT UniversityId, Email FROM Users
        WHERE UniversityId = @universityId OR LOWER(Email) = @email`,
-      { universityId: idCheck.id, email: normalizedEmail }
+      { universityId: idCheck.id, email: who.value }
     );
     if (existing.recordset.length) {
+      const idTaken = existing.recordset.some((r) => String(r.UniversityId || '') === idCheck.id);
       const emailTaken = existing.recordset.some(
-        (r) => String(r.Email || '').toLowerCase() === normalizedEmail
+        (r) => String(r.Email || '').toLowerCase() === who.value
       );
-      const idTaken = existing.recordset.some(
-        (r) => String(r.UniversityId || '') === idCheck.id
-      );
+
       if (emailTaken && idTaken) {
         return res.status(409).json({ error: 'This University ID and email are already registered. Sign in instead.' });
       }
@@ -51,35 +86,38 @@ router.post('/register/request-otp', async (req, res) => {
           error: 'This University ID is already registered. Use a different HU ID.',
         });
       }
-      return res.status(409).json({ error: 'University ID or email already registered' });
     }
 
-    console.log(`[OTP] Sending registration code to ${normalizedEmail} (${accountRole})`);
+    console.log(`[OTP] Sending registration code to ${who.value} (${accountRole})`);
     const issued = await issueOtp({
-      email: normalizedEmail,
+      identity: who.value,
       purpose: 'register',
       payload: { universityId: idCheck.id, role: accountRole },
     });
-    console.log(`[OTP] Registration code emailed to ${issued.email}`);
     res.json({
-      message: `Verification code sent to ${issued.email}`,
+      message: `Verification code sent to ${issued.deliveredTo}`,
+      identity: issued.identity,
       email: issued.email,
       expiresInMinutes: issued.expiresInMinutes,
-      emailed: true,
+      emailed: issued.emailed,
+      deliveredTo: issued.deliveredTo,
+      notice: issued.notice,
+      ...(issued.devCode ? { devCode: issued.devCode } : {}),
     });
   } catch (err) {
-    const status = err.code === 'smtp_not_configured' || err.code === 'smtp_send_failed' ? 503 : 500;
-    res.status(status).json({ error: err.message });
+    res.status(otpErrorStatus(err)).json({ error: err.message });
   }
 });
 
 /** Step 2 — verify registration OTP → registrationToken */
 router.post('/register/verify-otp', async (req, res) => {
   try {
-    const { email, code } = req.body;
-    if (!email || !code) return res.status(400).json({ error: 'Email and code are required' });
+    const { identity, email, code } = req.body;
+    const who = normalizeIdentity(identity ?? email);
+    if (!who.ok) return res.status(400).json({ error: who.error });
+    if (!code) return res.status(400).json({ error: 'Enter the verification code' });
 
-    const result = await verifyOtp({ email, purpose: 'register', code });
+    const result = await verifyOtp({ identity: who.value, purpose: 'register', code });
     if (!result.ok) return res.status(400).json({ error: result.error });
 
     const universityId = result.payload?.universityId;
@@ -90,6 +128,7 @@ router.post('/register/verify-otp', async (req, res) => {
 
     const registrationToken = signOtpGateToken({
       purpose: 'register',
+      identity: result.identity,
       email: result.email,
       universityId,
       role,
@@ -97,13 +136,14 @@ router.post('/register/verify-otp', async (req, res) => {
 
     res.json({
       registrationToken,
+      identity: result.identity,
       email: result.email,
       universityId,
       role,
       message: 'Email verified',
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, err);
   }
 });
 
@@ -111,7 +151,7 @@ router.post('/register/verify-otp', async (req, res) => {
 router.post('/register', async (req, res) => {
   try {
     const {
-      universityId, email, password, firstName, lastName, department, role,
+      universityId, identity, email, password, firstName, lastName, department, role,
       className, studyMode, registrationToken,
     } = req.body;
 
@@ -123,12 +163,15 @@ router.post('/register', async (req, res) => {
     try {
       gate = verifyOtpGateToken(registrationToken, 'register');
     } catch {
-      return res.status(401).json({ error: 'Email verification expired. Request a new code.' });
+      return res.status(401).json({ error: 'Verification expired. Request a new code.' });
     }
 
-    if (!universityId || !email || !password || !firstName || !lastName) {
-      return res.status(400).json({ error: 'University ID, email, password, first and last name are required' });
+    if (!universityId || !password || !firstName || !lastName) {
+      return res.status(400).json({ error: 'University ID, password, first and last name are required' });
     }
+
+    const who = normalizeIdentity(identity ?? email);
+    if (!who.ok) return res.status(400).json({ error: who.error });
 
     const accountRole = role === 'teacher' ? 'teacher' : 'student';
     if (role === 'admin') {
@@ -140,11 +183,13 @@ router.post('/register', async (req, res) => {
       return res.status(400).json({ error: idCheck.error });
     }
     const huId = idCheck.id;
-    const normalizedEmail = email.toLowerCase().trim();
+    const verifiedIdentity = gate.identity ?? gate.email;
 
-    if (gate.universityId !== huId || gate.email !== normalizedEmail || gate.role !== accountRole) {
-      return res.status(400).json({ error: 'Email verification does not match this registration. Start again.' });
+    if (gate.universityId !== huId || verifiedIdentity !== who.value || gate.role !== accountRole) {
+      return res.status(400).json({ error: 'Verification does not match this registration. Start again.' });
     }
+
+    const normalizedEmail = who.value;
 
     if (password.length < 8) {
       return res.status(400).json({ error: 'Password must be at least 8 characters' });
@@ -166,23 +211,24 @@ router.post('/register', async (req, res) => {
     }
 
     const existing = await query(
-      'SELECT UserId FROM Users WHERE UniversityId = @universityId OR Email = @email',
+      `SELECT UserId FROM Users
+       WHERE UniversityId = @universityId OR Email = @email`,
       { universityId: huId, email: normalizedEmail }
     );
     if (existing.recordset.length) {
       return res.status(409).json({ error: 'University ID or email already registered' });
     }
 
+    await consumeGateToken(gate);
     const hash = await bcrypt.hash(password, 12);
     const result = await query(
-      `INSERT INTO Users (UniversityId, Email, PasswordHash, PlainPassword, FirstName, LastName, Role, Department, ClassName, StudyMode, IsActive, AccountStatus)
+      `INSERT INTO Users (UniversityId, Email, PasswordHash, FirstName, LastName, Role, Department, ClassName, StudyMode, IsActive, AccountStatus)
        OUTPUT INSERTED.UserId, INSERTED.UniversityId, INSERTED.Email, INSERTED.FirstName, INSERTED.LastName, INSERTED.Role, INSERTED.Department, INSERTED.ClassName, INSERTED.StudyMode, INSERTED.AccountStatus
-       VALUES (@universityId, @email, @hash, @plain, @firstName, @lastName, @role, @department, @className, @studyMode, 0, 'pending')`,
+       VALUES (@universityId, @email, @hash, @firstName, @lastName, @role, @department, @className, @studyMode, 0, 'pending')`,
       {
         universityId: huId,
         email: normalizedEmail,
         hash,
-        plain: password,
         firstName: firstName.trim(),
         lastName: lastName.trim(),
         role: accountRole,
@@ -194,6 +240,14 @@ router.post('/register', async (req, res) => {
 
     const user = result.recordset[0];
 
+    await writeAuditLog({
+      req,
+      actorUserId: user.UserId,
+      action: 'account.register',
+      entityType: 'user',
+      entityId: user.UserId,
+      metadata: { role: user.Role, universityId: user.UniversityId },
+    });
     const admins = await query(`SELECT UserId FROM Users WHERE Role = 'admin' AND IsActive = 1 AND AccountStatus = 'approved'`);
     for (const admin of admins.recordset) {
       await query(
@@ -213,7 +267,7 @@ router.post('/register', async (req, res) => {
       message: `Your ${accountRole} account was submitted. An administrator must approve it before you can sign in.`,
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, err);
   }
 });
 
@@ -231,21 +285,24 @@ router.post('/admin/request-otp', async (req, res) => {
       return res.status(404).json({ error: 'No admin account with that email' });
     }
 
+    const admin = admins.recordset[0];
     const issued = await issueOtp({
       email,
       purpose: 'admin_login',
-      payload: { userId: admins.recordset[0].UserId },
+      payload: { userId: admin.UserId },
     });
 
     res.json({
-      message: 'Verification code sent to your email',
+      message: `Verification code sent to ${issued.deliveredTo}`,
       email: issued.email,
       expiresInMinutes: issued.expiresInMinutes,
-      emailed: true,
+      emailed: issued.emailed,
+      deliveredTo: issued.deliveredTo,
+      notice: issued.notice,
+      ...(issued.devCode ? { devCode: issued.devCode } : {}),
     });
   } catch (err) {
-    const status = err.code === 'smtp_not_configured' || err.code === 'smtp_send_failed' ? 503 : 500;
-    res.status(status).json({ error: err.message });
+    res.status(otpErrorStatus(err)).json({ error: err.message });
   }
 });
 
@@ -270,31 +327,32 @@ router.post('/admin/verify-otp', async (req, res) => {
       message: 'Email verified',
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, err);
   }
 });
 
 router.post('/login', async (req, res) => {
   try {
-    const { universityId, email, password, portalRole, adminLoginToken } = req.body;
-    if (!email || !password) {
-      return res.status(400).json({ error: 'Email and password are required' });
+    const { universityId, identity, email, password, portalRole, adminLoginToken } = req.body;
+    if (!password) {
+      return res.status(400).json({ error: 'Password is required' });
     }
 
-    const normalizedEmail = email.toLowerCase().trim();
+    const who = normalizeIdentity(identity ?? email);
+    if (!who.ok) return res.status(400).json({ error: who.error });
     let result;
+    let adminGate = null;
 
     if (portalRole === 'admin') {
       if (!adminLoginToken) {
         return res.status(400).json({ error: 'Verify your email with the OTP code first' });
       }
-      let gate;
       try {
-        gate = verifyOtpGateToken(adminLoginToken, 'admin_login');
+        adminGate = verifyOtpGateToken(adminLoginToken, 'admin_login');
       } catch {
         return res.status(401).json({ error: 'Email verification expired. Request a new code.' });
       }
-      if (gate.email !== normalizedEmail) {
+      if (adminGate.email !== who.value) {
         return res.status(400).json({ error: 'Email verification does not match. Start again.' });
       }
 
@@ -302,7 +360,7 @@ router.post('/login', async (req, res) => {
         `SELECT UserId, UniversityId, Email, PasswordHash, FirstName, LastName, Role, Department, ProfileImageUrl,
                 ClassName, StudyMode, IsActive, AccountStatus
          FROM Users WHERE LOWER(Email) = @email AND Role = 'admin'`,
-        { email: normalizedEmail }
+        { email: who.value }
       );
       if (!result.recordset.length) {
         return res.status(401).json({ error: 'Invalid admin email or password' });
@@ -318,8 +376,9 @@ router.post('/login', async (req, res) => {
       result = await query(
         `SELECT UserId, UniversityId, Email, PasswordHash, FirstName, LastName, Role, Department, ProfileImageUrl,
                 ClassName, StudyMode, IsActive, AccountStatus
-         FROM Users WHERE UniversityId = @universityId AND LOWER(Email) = @email`,
-        { universityId: idCheck.id, email: normalizedEmail }
+         FROM Users
+         WHERE UniversityId = @universityId AND LOWER(Email) = @email`,
+        { universityId: idCheck.id, email: who.value }
       );
     }
 
@@ -328,6 +387,12 @@ router.post('/login', async (req, res) => {
     }
 
     const user = result.recordset[0];
+    if (user.PasswordHash === '!RESET_REQUIRED!') {
+      return res.status(403).json({
+        error: 'For your security, reset your password before signing in.',
+        code: 'password_reset_required',
+      });
+    }
     const valid = await bcrypt.compare(password, user.PasswordHash);
     if (!valid) return res.status(401).json({ error: 'Invalid credentials' });
 
@@ -342,6 +407,7 @@ router.post('/login', async (req, res) => {
       return res.status(403).json({ error: 'This account is not active. Contact the administrator.' });
     }
 
+    if (adminGate) await consumeGateToken(adminGate);
     delete user.PasswordHash;
     delete user.AccountStatus;
     await query(
@@ -349,9 +415,17 @@ router.post('/login', async (req, res) => {
       { userId: user.UserId }
     );
     const token = signToken(user);
+    await writeAuditLog({
+      req,
+      actorUserId: user.UserId,
+      action: 'auth.login',
+      entityType: 'user',
+      entityId: user.UserId,
+      metadata: { role: user.Role },
+    });
     res.json({ token, user });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, err);
   }
 });
 
@@ -361,14 +435,18 @@ router.get('/me', authMiddleware, attachUserDetails, (req, res) => {
 
 router.put('/profile', authMiddleware, attachUserDetails, async (req, res) => {
   try {
+    // Block privilege / identity field tampering from the client body.
+    for (const forbidden of ['Role', 'role', 'IsActive', 'AccountStatus', 'PasswordHash', 'UniversityId', 'UserId', 'Email']) {
+      if (Object.prototype.hasOwnProperty.call(req.body || {}, forbidden)) {
+        return res.status(400).json({ error: 'That field cannot be changed here' });
+      }
+    }
+
     const { firstName, lastName, department, profileImageUrl, phone, bio, contactInfo, className, studyMode } = req.body;
+    let safeProfileImage = profileImageUrl === '' ? null : (profileImageUrl ?? req.userDetails.ProfileImageUrl ?? null);
     if (profileImageUrl !== undefined && profileImageUrl !== null && profileImageUrl !== '') {
-      if (typeof profileImageUrl !== 'string' || !profileImageUrl.startsWith('data:image/')) {
-        return res.status(400).json({ error: 'Profile image must be a valid image file' });
-      }
-      if (profileImageUrl.length > 600000) {
-        return res.status(400).json({ error: 'Profile image is too large (max ~400KB)' });
-      }
+      const image = validateProfileImageDataUrl(profileImageUrl);
+      safeProfileImage = image.data;
     }
 
     let nextClass = req.userDetails.ClassName ?? null;
@@ -403,7 +481,7 @@ router.put('/profile', authMiddleware, attachUserDetails, async (req, res) => {
         firstName: (firstName || req.userDetails.FirstName).trim(),
         lastName: (lastName || req.userDetails.LastName).trim(),
         department: department ?? req.userDetails.Department,
-        profileImageUrl: profileImageUrl === '' ? null : (profileImageUrl ?? req.userDetails.ProfileImageUrl ?? null),
+        profileImageUrl: safeProfileImage,
         phone: phone ?? req.userDetails.Phone ?? null,
         bio: bio ?? req.userDetails.Bio ?? null,
         contactInfo: contactInfo ?? req.userDetails.ContactInfo ?? null,
@@ -418,24 +496,25 @@ router.put('/profile', authMiddleware, attachUserDetails, async (req, res) => {
     );
     res.json({ user: updated.recordset[0] });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(err.status || 500).json({
+      error: err.status ? err.message : (process.env.NODE_ENV === 'production' ? 'Profile update failed' : err.message),
+    });
   }
 });
-
-/** Forgot password step 1 — email → OTP (student / teacher / admin) */
 router.post('/password-reset/request-otp', async (req, res) => {
   try {
-    const email = String(req.body.email || '').toLowerCase().trim();
     const portalRole = String(req.body.role || '').toLowerCase().trim();
-    if (!email) return res.status(400).json({ error: 'Email is required' });
+    const who = normalizeIdentity(req.body.identity ?? req.body.email);
+    if (!who.ok) return res.status(400).json({ error: who.error });
     if (!['student', 'teacher', 'admin'].includes(portalRole)) {
       return res.status(400).json({ error: 'Role is required (student, teacher, or admin)' });
     }
 
     const users = await query(
       `SELECT UserId, Email, Role, AccountStatus, IsActive
-       FROM Users WHERE LOWER(Email) = @email AND Role = @role`,
-      { email, role: portalRole }
+       FROM Users
+       WHERE Role = @role AND LOWER(Email) = @email`,
+      { role: portalRole, email: who.value }
     );
     if (!users.recordset.length) {
       return res.status(404).json({ error: 'No account found with that email for this portal' });
@@ -452,35 +531,40 @@ router.post('/password-reset/request-otp', async (req, res) => {
     }
 
     const issued = await issueOtp({
-      email,
+      identity: who.value,
       purpose: 'password_reset',
       payload: { userId: user.UserId, role: portalRole },
     });
 
     res.json({
-      message: 'Verification code sent to your email',
+      message: `Verification code sent to ${issued.deliveredTo}`,
+      identity: issued.identity,
       email: issued.email,
       expiresInMinutes: issued.expiresInMinutes,
-      emailed: true,
+      emailed: issued.emailed,
+      deliveredTo: issued.deliveredTo,
+      notice: issued.notice,
+      ...(issued.devCode ? { devCode: issued.devCode } : {}),
     });
   } catch (err) {
-    const status = err.code === 'smtp_not_configured' || err.code === 'smtp_send_failed' ? 503 : 500;
-    res.status(status).json({ error: err.message });
+    res.status(otpErrorStatus(err)).json({ error: err.message });
   }
 });
 
 /** Forgot password step 2 — verify OTP → resetToken */
 router.post('/password-reset/verify-otp', async (req, res) => {
   try {
-    const email = String(req.body.email || '').toLowerCase().trim();
+    const who = normalizeIdentity(req.body.identity ?? req.body.email);
+    if (!who.ok) return res.status(400).json({ error: who.error });
     const { code } = req.body;
-    if (!email || !code) return res.status(400).json({ error: 'Email and code are required' });
+    if (!code) return res.status(400).json({ error: 'Enter the verification code' });
 
-    const result = await verifyOtp({ email, purpose: 'password_reset', code });
+    const result = await verifyOtp({ identity: who.value, purpose: 'password_reset', code });
     if (!result.ok) return res.status(400).json({ error: result.error });
 
     const resetToken = signOtpGateToken({
       purpose: 'password_reset',
+      identity: result.identity,
       email: result.email,
       userId: result.payload?.userId,
       role: result.payload?.role,
@@ -488,11 +572,12 @@ router.post('/password-reset/verify-otp', async (req, res) => {
 
     res.json({
       resetToken,
+      identity: result.identity,
       email: result.email,
       message: 'Email verified — set a new password',
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, err);
   }
 });
 
@@ -532,20 +617,29 @@ router.post('/password-reset/confirm', async (req, res) => {
       return res.status(400).json({ error: 'Role mismatch. Start password reset again.' });
     }
 
+    await consumeGateToken(gate);
     const passwordHash = await bcrypt.hash(String(newPassword), 12);
     await query(
-      `UPDATE Users SET PasswordHash = @passwordHash, PlainPassword = @plain, UpdatedAt = SYSUTCDATETIME()
+      `UPDATE Users SET PasswordHash = @passwordHash, UpdatedAt = SYSUTCDATETIME()
        WHERE UserId = @userId`,
-      { passwordHash, plain: String(newPassword), userId }
+      { passwordHash, userId }
     );
 
+    await writeAuditLog({
+      req,
+      actorUserId: userId,
+      action: 'auth.password_reset',
+      entityType: 'user',
+      entityId: userId,
+      metadata: { role: users.recordset[0].Role },
+    });
     res.json({
       message: 'Password updated. You can sign in with your new password.',
       email,
       role: users.recordset[0].Role,
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, err);
   }
 });
 
@@ -604,8 +698,7 @@ router.put('/credentials', authMiddleware, attachUserDetails, async (req, res) =
         return res.status(400).json({ error: 'New password must be at least 8 characters' });
       }
       params.passwordHash = await bcrypt.hash(newPassword, 12);
-      params.plain = newPassword;
-      updates.push('PasswordHash = @passwordHash', 'PlainPassword = @plain');
+      updates.push('PasswordHash = @passwordHash');
     }
 
     updates.push('UpdatedAt = SYSUTCDATETIME()');
@@ -620,7 +713,7 @@ router.put('/credentials', authMiddleware, attachUserDetails, async (req, res) =
     const token = signToken(user);
     res.json({ user, token, message: 'Account updated successfully' });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, err);
   }
 });
 
@@ -630,7 +723,7 @@ router.post('/heartbeat', authMiddleware, async (req, res) => {
     await query('UPDATE Users SET LastSeenAt = SYSUTCDATETIME() WHERE UserId = @userId', { userId: req.user.userId });
     res.json({ ok: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, err);
   }
 });
 

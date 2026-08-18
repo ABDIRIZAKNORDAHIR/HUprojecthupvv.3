@@ -50,9 +50,9 @@ export function AdminCredentialsPanel({ onChange }: { onChange?: () => void }) {
         <div className="px-5 py-4 border-b bg-gradient-to-r from-purple-50 to-blue-50">
           <div className="flex items-center gap-2">
             <Key size={18} className="text-purple-600" />
-            <h3 className="font-bold text-sm">Admin & Teacher Credentials</h3>
+            <h3 className="font-bold text-sm">Admin & Teacher Directory</h3>
           </div>
-          <p className="text-xs text-gray-500 mt-1">View credentials and manage teacher accounts</p>
+          <p className="text-xs text-gray-500 mt-1">View account identifiers and manage teacher accounts</p>
         </div>
         {error && <p className="mx-5 mt-4 text-sm text-red-600 bg-red-50 p-3 rounded-xl">{error}</p>}
         <div className="divide-y">
@@ -78,7 +78,7 @@ export function AdminCredentialsPanel({ onChange }: { onChange?: () => void }) {
                   </div>
                 </div>
 
-                <div className="flex-1 grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {u.Role !== 'admin' && (
                     <div className="rounded-lg border bg-gray-50 px-3 py-2">
                       <p className="text-[10px] uppercase font-bold text-gray-400">University ID</p>
@@ -101,22 +101,6 @@ export function AdminCredentialsPanel({ onChange }: { onChange?: () => void }) {
                         className="text-gray-400 hover:text-purple-600 flex-shrink-0">
                         {copied === `em-${u.UserId}` ? <Check size={14} /> : <Copy size={14} />}
                       </button>
-                    </div>
-                  </div>
-                  <div className="rounded-lg border border-amber-100 bg-amber-50 px-3 py-2">
-                    <p className="text-[10px] uppercase font-bold text-amber-700 flex items-center gap-1">
-                      <Key size={10} /> Password
-                    </p>
-                    <div className="flex items-center justify-between gap-2 mt-0.5">
-                      <p className="font-mono text-sm font-bold text-amber-900">
-                        {u.PlainPassword || '—'}
-                      </p>
-                      {u.PlainPassword && (
-                        <button type="button" onClick={() => copy(u.PlainPassword!, `pw-${u.UserId}`)}
-                          className="text-amber-600 hover:text-amber-800 flex-shrink-0">
-                          {copied === `pw-${u.UserId}` ? <Check size={14} /> : <Copy size={14} />}
-                        </button>
-                      )}
                     </div>
                   </div>
                 </div>

@@ -1,11 +1,17 @@
 import { Router } from 'express';
 import { query } from '../db.js';
+import { sendError } from '../utils/httpError.js';
 import { authMiddleware, attachUserDetails } from '../middleware/auth.js';
-import { studentCanAccessProject } from '../utils/projectAccess.js';
+import {
+  getProjectParticipantIds,
+  studentCanAccessProject,
+  userCanAccessProject,
+} from '../utils/projectAccess.js';
 import { notifyMessageReceived } from '../services/notify.js';
 import { analyzeAttachment, analyzeTextContent } from '../services/documentAI.js';
 import { runProjectAIAnalysis } from '../services/projectAIService.js';
-import { syncUserProjectConversations } from '../services/conversationSetup.js';
+import { ensureConversationMember, syncUserProjectConversations } from '../services/conversationSetup.js';
+import { validateDataUrlAttachment } from '../utils/attachments.js';
 import {
   canUsersChat, directChatType, findExistingDirectConversation, findExistingDirectConversationBetween, conversationHasTeacher,
   adminCanViewConversationType,
@@ -14,14 +20,31 @@ import {
 const router = Router();
 router.use(authMiddleware, attachUserDetails);
 
-const MAX_ATTACHMENT = 4_000_000;
-
 async function isMember(userId, conversationId) {
   const r = await query(
     'SELECT 1 FROM ConversationMembers WHERE ConversationId = @cid AND UserId = @uid',
     { cid: conversationId, uid: userId }
   );
   return r.recordset.length > 0;
+}
+
+async function reconcileMembers(conversationId, userIds) {
+  const allowed = new Set(userIds.map(Number).filter(Number.isInteger));
+  const current = await query(
+    'SELECT UserId FROM ConversationMembers WHERE ConversationId = @cid',
+    { cid: conversationId }
+  );
+  for (const row of current.recordset) {
+    if (!allowed.has(Number(row.UserId))) {
+      await query(
+        'DELETE FROM ConversationMembers WHERE ConversationId = @cid AND UserId = @uid',
+        { cid: conversationId, uid: row.UserId }
+      );
+    }
+  }
+  for (const userId of allowed) {
+    await ensureConversationMember(conversationId, userId);
+  }
 }
 
 async function saveDocumentAnalysis({ projectId, conversationMessageId, fileName, fileType, analysis }) {
@@ -63,7 +86,7 @@ router.post('/sync-projects', async (req, res) => {
     const result = await syncUserProjectConversations(req.user.userId, req.user.role);
     res.json({ ok: true, ...result });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Could not synchronize project conversations' });
   }
 });
 
@@ -84,7 +107,7 @@ router.get('/', async (req, res) => {
     );
     res.json({ conversations: result.recordset });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, err);
   }
 });
 
@@ -104,8 +127,26 @@ router.post('/', async (req, res) => {
       return res.status(403).json({ error: 'Admin can only start direct messages with students or teachers' });
     }
 
+    const hasProjectId = projectId != null && projectId !== '';
+    const projectScoped = type === 'project_group' || (type === 'teacher_student' && hasProjectId);
+    if (projectScoped) {
+      projectId = Number(projectId);
+      if (!Number.isInteger(projectId) || projectId <= 0) {
+        return res.status(400).json({ error: 'A valid project is required for this conversation type' });
+      }
+      if (!(await userCanAccessProject(req.user, projectId))) {
+        return res.status(403).json({ error: 'Not authorized for this project' });
+      }
+      // Project conversation membership is always derived from authoritative project records.
+      participantIds = [];
+    } else if (!Array.isArray(participantIds)) {
+      participantIds = [];
+    } else if (participantIds.some(id => !Number.isInteger(Number(id)) || Number(id) <= 0)) {
+      return res.status(400).json({ error: 'Invalid participant' });
+    }
+
     const members = new Set([req.user.userId, ...(participantIds || [])].map(Number));
-    if (type === 'student_direct' && members.size !== 2) {
+    if ((type === 'student_direct' || (type === 'teacher_student' && !projectScoped)) && members.size !== 2) {
       return res.status(400).json({ error: 'Direct chat requires exactly one other person' });
     }
 
@@ -135,34 +176,46 @@ router.post('/', async (req, res) => {
       }
     }
 
-    if (type === 'teacher_student' && projectId) {
+    if (type === 'teacher_student' && projectScoped) {
+      const projectMembers = await getProjectParticipantIds(projectId);
+      const proj = await query(
+        'SELECT AssignedByTeacherId, OwnerStudentId FROM Projects WHERE ProjectId = @pid',
+        { pid: projectId }
+      );
+      const p = proj.recordset[0];
+      if (!p) return res.status(404).json({ error: 'Project not found' });
+      members.clear();
+      if (projectMembers.includes(Number(p.AssignedByTeacherId))) members.add(Number(p.AssignedByTeacherId));
+      if (projectMembers.includes(Number(p.OwnerStudentId))) members.add(Number(p.OwnerStudentId));
+      if (!members.has(Number(req.user.userId))) {
+        return res.status(403).json({ error: 'Only the project owner or assigned teacher can use this conversation' });
+      }
+
       const existing = await query(
         `SELECT c.ConversationId FROM Conversations c
          WHERE c.ConversationType = 'teacher_student' AND c.ProjectId = @pid`,
         { pid: projectId }
       );
       if (existing.recordset.length) {
-        return res.json({ conversationId: existing.recordset[0].ConversationId, existing: true });
+        const conversationId = existing.recordset[0].ConversationId;
+        await reconcileMembers(conversationId, [...members]);
+        return res.json({ conversationId, existing: true });
       }
-      const proj = await query(
-        'SELECT AssignedByTeacherId, OwnerStudentId, Title FROM Projects WHERE ProjectId = @pid',
-        { pid: projectId }
-      );
-      if (!proj.recordset.length) return res.status(404).json({ error: 'Project not found' });
-      const p = proj.recordset[0];
-      members.clear();
-      members.add(p.AssignedByTeacherId);
-      if (p.OwnerStudentId) members.add(p.OwnerStudentId);
     }
 
-    if (type === 'project_group' && projectId) {
-      const team = await query(
-        `SELECT OwnerStudentId AS UserId FROM Projects WHERE ProjectId = @pid
-         UNION SELECT StudentId FROM ProjectMembers WHERE ProjectId = @pid
-         UNION SELECT AssignedByTeacherId FROM Projects WHERE ProjectId = @pid`,
+    if (type === 'project_group') {
+      members.clear();
+      for (const userId of await getProjectParticipantIds(projectId)) members.add(userId);
+      const existing = await query(
+        `SELECT ConversationId FROM Conversations
+         WHERE ConversationType = 'project_group' AND ProjectId = @pid`,
         { pid: projectId }
       );
-      for (const row of team.recordset) if (row.UserId) members.add(row.UserId);
+      if (existing.recordset.length) {
+        const conversationId = existing.recordset[0].ConversationId;
+        await reconcileMembers(conversationId, [...members]);
+        return res.json({ conversationId, existing: true });
+      }
     }
 
     const ins = await query(
@@ -185,7 +238,7 @@ router.post('/', async (req, res) => {
     }
     res.status(201).json({ conversationId, existing: false });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, err);
   }
 });
 
@@ -237,7 +290,7 @@ router.get('/:conversationId/messages', async (req, res) => {
       })),
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, err);
   }
 });
 
@@ -264,9 +317,23 @@ router.post('/:conversationId/messages', async (req, res) => {
     if (!text && !hasAttachment) {
       return res.status(400).json({ error: 'Message or attachment required' });
     }
-    if (hasAttachment && attachmentData.length > MAX_ATTACHMENT) {
-      return res.status(400).json({ error: 'Attachment too large (max ~4MB)' });
+    let attachment = null;
+    if (hasAttachment) {
+      if (!['image', 'video', 'file'].includes(attachmentType)) {
+        return res.status(400).json({ error: 'Invalid attachment type' });
+      }
+      attachment = validateDataUrlAttachment({ data: attachmentData, name: attachmentName });
+      const categoryMatches = attachmentType === 'image'
+        ? attachment.mime.startsWith('image/')
+        : attachmentType === 'video'
+          ? attachment.mime.startsWith('video/')
+          : !attachment.mime.startsWith('image/') && !attachment.mime.startsWith('video/');
+      if (!categoryMatches) {
+        return res.status(400).json({ error: 'Attachment category does not match the file type' });
+      }
     }
+    const safeAttachmentName = attachment?.name || null;
+    const safeAttachmentData = attachment?.data || null;
 
     const conv = await query(
       'SELECT ProjectId, ConversationType FROM Conversations WHERE ConversationId = @cid',
@@ -283,8 +350,8 @@ router.post('/:conversationId/messages', async (req, res) => {
         senderId: req.user.userId,
         content: text,
         attachmentType: hasAttachment ? attachmentType : null,
-        attachmentName: hasAttachment ? attachmentName : null,
-        attachmentData: hasAttachment ? attachmentData : null,
+        attachmentName: safeAttachmentName,
+        attachmentData: safeAttachmentData,
       }
     );
     const msg = ins.recordset[0];
@@ -311,8 +378,8 @@ router.post('/:conversationId/messages', async (req, res) => {
     if (shouldAnalyzeForTeacher) {
       if (hasAttachment && ['file', 'image', 'video'].includes(attachmentType)) {
         const analysis = await analyzeAttachment({
-          fileName: attachmentName,
-          attachmentData,
+          fileName: safeAttachmentName,
+          attachmentData: safeAttachmentData,
           attachmentType,
           projectTitle,
           projectAbstract,
@@ -320,8 +387,8 @@ router.post('/:conversationId/messages', async (req, res) => {
         documentAnalysis = await saveDocumentAnalysis({
           projectId,
           conversationMessageId: msg.ConversationMessageId,
-          fileName: attachmentName,
-          fileType: attachmentName.split('.').pop()?.toLowerCase() || attachmentType,
+          fileName: safeAttachmentName,
+          fileType: safeAttachmentName.split('.').pop()?.toLowerCase() || attachmentType,
           analysis,
         });
       } else if (text) {
@@ -336,8 +403,8 @@ router.post('/:conversationId/messages', async (req, res) => {
       }
     } else if (hasAttachment && attachmentType === 'file') {
       const analysis = await analyzeAttachment({
-        fileName: attachmentName,
-        attachmentData,
+        fileName: safeAttachmentName,
+        attachmentData: safeAttachmentData,
         attachmentType: 'file',
         projectTitle,
         projectAbstract,
@@ -345,8 +412,8 @@ router.post('/:conversationId/messages', async (req, res) => {
       documentAnalysis = await saveDocumentAnalysis({
         projectId,
         conversationMessageId: msg.ConversationMessageId,
-        fileName: attachmentName,
-        fileType: attachmentName.split('.').pop()?.toLowerCase() || 'file',
+        fileName: safeAttachmentName,
+        fileType: safeAttachmentName.split('.').pop()?.toLowerCase() || 'file',
         analysis,
       });
     }
@@ -365,7 +432,7 @@ router.post('/:conversationId/messages', async (req, res) => {
       `SELECT FirstName + ' ' + LastName AS Name FROM Users WHERE UserId = @id`,
       { id: req.user.userId }
     );
-    const preview = text || `Sent file: ${attachmentName}`;
+    const preview = text || `Sent file: ${safeAttachmentName}`;
     for (const m of members.recordset) {
       await notifyMessageReceived({
         receiverId: m.UserId,
@@ -397,7 +464,9 @@ router.post('/:conversationId/messages', async (req, res) => {
 
     res.status(201).json({ message: msg, documentAnalysis });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(err.status || 500).json({
+      error: err.status ? err.message : 'Could not send this message',
+    });
   }
 });
 
@@ -427,7 +496,7 @@ router.get('/project/:projectId/history', async (req, res) => {
     );
     res.json({ conversations: convs.recordset });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, err);
   }
 });
 

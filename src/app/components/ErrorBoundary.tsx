@@ -1,9 +1,10 @@
 import { Component, type ReactNode } from 'react';
-import { HU_BRAND_GREEN } from '../config/appImages';
+import { HU_BRAND_GREEN, UNIVERSITY_NAME } from '../config/appImages';
 import { BrandLogo } from './BrandLogo';
 
 interface Props {
   children: ReactNode;
+  resetKey?: string;
 }
 
 interface State {
@@ -23,6 +24,12 @@ export class ErrorBoundary extends Component<Props, State> {
     console.error('ProjectHub error:', error);
   }
 
+  componentDidUpdate(prevProps: Props) {
+    if (this.props.resetKey !== prevProps.resetKey && this.state.hasError) {
+      this.setState({ hasError: false, message: undefined });
+    }
+  }
+
   render() {
     if (this.state.hasError) {
       return (
@@ -37,15 +44,15 @@ export class ErrorBoundary extends Component<Props, State> {
               Something went wrong loading this page.
             </p>
             <p className="text-xs font-semibold text-black/70 mt-2">
-              Run START_HERE.bat, then press Ctrl+Shift+R.
+              Refresh the page. If the problem continues, contact the ProjectHub office.
             </p>
-            {this.state.message && (
-              <p className="text-[10px] font-mono text-red-600 mt-2 break-all">{this.state.message}</p>
-            )}
             <div className="flex flex-col sm:flex-row gap-3 justify-center mt-6">
               <button
                 type="button"
-                onClick={() => window.location.reload()}
+                onClick={() => {
+                  this.setState({ hasError: false, message: undefined });
+                  window.location.reload();
+                }}
                 className="px-5 py-2.5 rounded-xl text-white font-bold text-sm"
                 style={{ background: HU_BRAND_GREEN }}
               >

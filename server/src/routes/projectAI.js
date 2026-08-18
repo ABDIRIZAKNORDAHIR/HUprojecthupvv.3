@@ -9,6 +9,7 @@ import {
 } from '../services/projectAIService.js';
 import { assertTeacherOwnsProject } from '../services/projectContext.js';
 import { query } from '../db.js';
+import { sendError } from '../utils/httpError.js';
 
 const router = Router({ mergeParams: true });
 router.use(authMiddleware, attachUserDetails);
@@ -71,7 +72,7 @@ router.post('/analyze', requireRole('teacher'), async (req, res) => {
     });
     res.json({ analysis: result.analysis, provider: result.provider, model: result.model });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, err);
   }
 });
 
@@ -85,7 +86,7 @@ router.get('/chat', requireRole('teacher'), async (req, res) => {
     const info = getAIProviderInfo();
     res.json({ messages, configured: info.configured, provider: info.provider, model: info.model });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, err);
   }
 });
 
@@ -108,7 +109,7 @@ router.post('/chat', requireRole('teacher'), async (req, res) => {
 
     res.json({ answer: result.answer, provider: result.provider, model: result.model });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, err);
   }
 });
 
@@ -130,7 +131,7 @@ router.get('/briefing', requireRole('teacher'), async (req, res) => {
       analysis: enrichAnalysisRow(r.recordset[0] || null),
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, err);
   }
 });
 

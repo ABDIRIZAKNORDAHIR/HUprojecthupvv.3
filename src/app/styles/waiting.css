@@ -1,0 +1,166 @@
+/* Shared "waiting" visual language: draining hourglass mark, status pill, medallion. */
+
+.wmark {
+  --wm-frame: #b45309;
+  --wm-sand-a: #fbbf24;
+  --wm-sand-b: #f59e0b;
+  --wm-glass: rgba(245, 158, 11, 0.14);
+  display: block;
+  flex: none;
+  overflow: visible;
+}
+
+.wmark--emerald { --wm-frame: #047857; --wm-sand-a: #34d399; --wm-sand-b: #10b981; --wm-glass: rgba(16, 185, 129, 0.14); }
+.wmark--teal { --wm-frame: #0f766e; --wm-sand-a: #5eead4; --wm-sand-b: #14b8a6; --wm-glass: rgba(20, 184, 166, 0.14); }
+.wmark--violet { --wm-frame: #6d28d9; --wm-sand-a: #c4b5fd; --wm-sand-b: #8b5cf6; --wm-glass: rgba(139, 92, 246, 0.14); }
+
+.wmark__sand-a { stop-color: var(--wm-sand-a); }
+.wmark__sand-b { stop-color: var(--wm-sand-b); }
+
+.wmark__bulb { fill: var(--wm-glass); }
+
+.wmark__frame {
+  fill: none;
+  stroke: var(--wm-frame);
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+}
+
+.wmark__cap { fill: var(--wm-frame); }
+
+.wmark__grain { fill: var(--wm-sand-b); opacity: 0; }
+
+.wmark__glass { transform-origin: 12px 12px; animation: wmark-flip 4.2s linear infinite; }
+.wmark__drain { animation: wmark-drain 4.2s cubic-bezier(0.4, 0, 0.5, 1) infinite; }
+.wmark__fill { transform: translateY(8px); animation: wmark-fill 4.2s cubic-bezier(0.4, 0, 0.5, 1) infinite; }
+.wmark__grain { animation: wmark-grain 0.62s linear infinite; }
+
+@keyframes wmark-flip {
+  0%, 84% { transform: rotate(0deg); }
+  100% { transform: rotate(180deg); }
+}
+
+@keyframes wmark-drain {
+  0% { transform: translateY(0); }
+  78%, 100% { transform: translateY(8px); }
+}
+
+@keyframes wmark-fill {
+  0% { transform: translateY(8px); }
+  78%, 100% { transform: translateY(0); }
+}
+
+@keyframes wmark-grain {
+  0% { transform: translateY(0); opacity: 0; }
+  25% { opacity: 1; }
+  85% { opacity: 1; }
+  100% { transform: translateY(5.4px); opacity: 0; }
+}
+
+/* ── Status pill ── */
+.wbadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.38rem;
+  padding: 0.28rem 0.62rem 0.28rem 0.45rem;
+  border: 1px solid #fde3ac;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #fffdf5, #fff7e6);
+  color: #92400e;
+  font-size: 0.74rem;
+  font-weight: 800;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
+.wbadge--emerald { border-color: #b6ecd3; background: linear-gradient(180deg, #f7fffb, #ecfdf5); color: #065f46; }
+.wbadge--teal { border-color: #a7e5df; background: linear-gradient(180deg, #f5fffe, #ecfdfa); color: #115e59; }
+.wbadge--violet { border-color: #ddd2fb; background: linear-gradient(180deg, #fbf9ff, #f5f3ff); color: #5b21b6; }
+
+/* ── Medallion ── */
+.wmedal {
+  --wd-a: #f59e0b;
+  --wd-b: #fbbf24;
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 108px;
+  height: 108px;
+  margin-inline: auto;
+}
+
+.wmedal--emerald { --wd-a: #10b981; --wd-b: #34d399; }
+.wmedal--teal { --wd-a: #14b8a6; --wd-b: #5eead4; }
+.wmedal--violet { --wd-a: #8b5cf6; --wd-b: #c4b5fd; }
+
+.wmedal__pulse,
+.wmedal__ring,
+.wmedal__core {
+  position: absolute;
+  border-radius: 50%;
+}
+
+.wmedal__pulse {
+  inset: 0;
+  background: radial-gradient(circle, color-mix(in srgb, var(--wd-a) 22%, transparent) 0%, transparent 68%);
+  animation: wmedal-pulse 2.8s ease-in-out infinite;
+}
+
+.wmedal__ring {
+  inset: 12px;
+  border: 2px dashed color-mix(in srgb, var(--wd-a) 42%, transparent);
+  animation: wmedal-spin 14s linear infinite;
+}
+
+.wmedal__core {
+  inset: 24px;
+  display: grid;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--wd-a) 28%, #fff);
+  background: #fff;
+  box-shadow: 0 14px 30px color-mix(in srgb, var(--wd-a) 22%, transparent);
+}
+
+.wmedal__role {
+  position: absolute;
+  bottom: -2px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.22rem 0.6rem;
+  border-radius: 999px;
+  background: linear-gradient(135deg, var(--wd-a), var(--wd-b));
+  color: #fff;
+  box-shadow: 0 8px 18px color-mix(in srgb, var(--wd-a) 34%, transparent);
+}
+
+.wmedal__role em {
+  font-size: 0.66rem;
+  font-style: normal;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+@keyframes wmedal-pulse {
+  0%, 100% { transform: scale(0.94); opacity: 0.75; }
+  50% { transform: scale(1.06); opacity: 1; }
+}
+
+@keyframes wmedal-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wmark__glass,
+  .wmark__drain,
+  .wmark__fill,
+  .wmark__grain,
+  .wmedal__pulse,
+  .wmedal__ring {
+    animation: none;
+  }
+  .wmark__drain { transform: translateY(4px); }
+  .wmark__fill { transform: translateY(4px); }
+  .wmark__grain { opacity: 1; }
+}

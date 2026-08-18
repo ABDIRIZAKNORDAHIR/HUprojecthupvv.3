@@ -25,9 +25,9 @@ export function BackendStatusBanner() {
   return (
     <div
       role="alert"
-      className="fixed top-0 left-0 right-0 z-[9999] bg-red-600 text-white text-sm px-4 py-2 text-center shadow-md"
+      className="fixed top-0 left-0 right-0 z-[9999] bg-[#06301f] text-white text-sm px-4 py-2.5 text-center shadow-md"
     >
-      API offline — start <strong>ProjectHub.bat</strong> (port 3004).
+      ProjectHub cannot reach the university server right now. Please try again in a moment.
     </div>
   );
 }

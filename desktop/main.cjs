@@ -2,7 +2,7 @@
  * Hormuud ProjectHub — Desktop Application (Electron)
  * Real Windows app: own window, taskbar icon, no browser tabs.
  */
-const { app, BrowserWindow, shell, dialog } = require('electron');
+const { app, BrowserWindow, shell, dialog, session } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
@@ -100,6 +100,10 @@ function startLocalServer() {
 }
 
 function createWindow() {
+  const appOrigin = new URL(config.appUrl).origin;
+  if (isPackaged && !config.appUrl.startsWith('https://')) {
+    throw new Error('Packaged ProjectHub must use an HTTPS appUrl');
+  }
   const iconPath = path.join(projectRoot, 'desktop', 'icon.png');
   mainWindow = new BrowserWindow({
     width: 1360,
@@ -114,6 +118,7 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
+      sandbox: true,
     },
   });
 
@@ -122,6 +127,18 @@ function createWindow() {
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     if (url.startsWith('http')) shell.openExternal(url);
     return { action: 'deny' };
+  });
+
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    if (new URL(url).origin !== appOrigin) {
+      event.preventDefault();
+      if (/^https?:\/\//i.test(url)) shell.openExternal(url);
+    }
+  });
+
+  session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
+    const requestingOrigin = new URL(webContents.getURL()).origin;
+    callback(requestingOrigin === appOrigin && permission === 'notifications');
   });
 
   mainWindow.on('closed', () => {

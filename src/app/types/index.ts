@@ -4,7 +4,6 @@ export type ViewId =
   | "dashboard"
   | "ai-queue"
   | "submissions"
-  | "collisions"
   | "students"
   | "analytics"
   | "atlas"
@@ -20,8 +19,7 @@ export type ViewId =
   | "users"
   | "ai-settings"
   | "export-center"
-  | "class-assignments"
-  | "ai-coach";
+  | "class-assignments";
 
 export type SubmissionStatus = "pending" | "approved" | "rejected" | "changes_requested";
 
@@ -67,13 +65,23 @@ export interface AthenaVerdict {
 
 export interface Submission {
   id: string;
+  student_id?: number | null;
   student_name: string;
   student_avatar: string;
+  student_photo?: string | null;
+  university_id?: string;
+  department_name?: string;
+  class_name?: string;
+  study_mode?: string;
   department: string;
   project_title: string;
   abstract: string;
   submission_date: string;
   status: SubmissionStatus;
+  /** Raw workflow stage from the API (pending_teacher, assigned, submitted, …). */
+  stage?: string;
+  /** ISO time the project reached the teacher, used to order the review queue. */
+  arrived_at?: string;
   athena: AthenaVerdict;
 }
 

@@ -2,8 +2,8 @@ import { useEffect, useState, useRef } from 'react';
 import { useParams, Link } from 'react-router';
 import { motion } from 'motion/react';
 import {
-  ArrowLeft, Send, UserPlus, Sparkles, Check, X, Edit3,
-  AlertTriangle, Users,
+  ArrowLeft, UserPlus, CheckCircle2, Edit3,
+  AlertTriangle, Users, CalendarClock, Send, Lock, UsersRound,
 } from 'lucide-react';
 import { api } from '../api/client';
 import { useAuth } from '../context/AuthContext';
@@ -15,7 +15,17 @@ import { ProjectEvaluationPanel } from '../components/ProjectEvaluationPanel';
 import { DocumentAnalysisPanel } from '../components/DocumentAnalysisPanel';
 import { ProjectAIAssistant } from '../components/ProjectAIAssistant';
 import { UniversityIdLookup, type LookupPerson } from '../components/UniversityIdLookup';
+import { UserAvatar } from '../components/UserAvatar';
+import { WaitingMark } from '../components/WaitingIcon';
+import { ReviewDecisionPanel, type ReviewDecision } from '../components/ReviewDecisionPanel';
 import type { DocumentAnalysis } from '../api/client';
+
+function statusTone(status: string): 'success' | 'warning' | 'danger' | 'info' {
+  if (status === 'approved') return 'success';
+  if (status === 'rejected' || status === 'changes_requested') return 'danger';
+  if (status === 'submitted' || status === 'under_review' || status === 'pending_teacher') return 'warning';
+  return 'info';
+}
 
 export function ProjectDetailPage() {
   const { id } = useParams();
@@ -32,7 +42,7 @@ export function ProjectDetailPage() {
   const [foundMember, setFoundMember] = useState<LookupPerson | null>(null);
   const [inviteNote, setInviteNote] = useState('');
   const [inviting, setInviting] = useState(false);
-  const [rejectReason, setRejectReason] = useState('');
+  const [reviewing, setReviewing] = useState(false);
   const [docAnalyses, setDocAnalyses] = useState<DocumentAnalysis[]>([]);
   const [chatScope, setChatScope] = useState<'teacher_student' | 'project_group'>('teacher_student');
   const [loading, setLoading] = useState(true);
@@ -77,6 +87,8 @@ export function ProjectDetailPage() {
     }
   };
 
+  // Fetch a fresh view when project or signed-in user changes.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { load(); }, [projectId, user?.UserId]);
   useEffect(() => { chatEnd.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
   useEffect(() => {
@@ -125,21 +137,29 @@ export function ProjectDetailPage() {
     }
   };
 
-  const handleReview = async (action: string) => {
-    if (action === 'rejected' && !rejectReason.trim()) {
-      setError('Rejection description is required — explain why you are rejecting');
-      return;
-    }
+  const handleReview = async (action: ReviewDecision, comment: string) => {
+    setReviewing(true);
+    setError('');
     try {
-      await api.reviewProject(projectId, {
-        action,
-        rejectionReason: action === 'rejected' ? rejectReason : undefined,
-        message: action === 'changes_requested' ? 'Please revise your project based on feedback.' : undefined,
-      });
-      setRejectReason('');
+      // A proposal that has not been accepted yet goes through the assignment flow.
+      if (data?.project.Status === 'pending_teacher') {
+        await api.respondToAssignment(projectId, {
+          action: action === 'approved' ? 'accept' : action === 'rejected' ? 'reject' : 'request_changes',
+          rejectionReason: action === 'rejected' ? comment : undefined,
+          message: action !== 'rejected' ? comment || undefined : undefined,
+        });
+      } else {
+        await api.reviewProject(projectId, {
+          action,
+          rejectionReason: action === 'rejected' ? comment : undefined,
+          message: action !== 'rejected' ? comment || undefined : undefined,
+        });
+      }
       load();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Review failed');
+    } finally {
+      setReviewing(false);
     }
   };
 
@@ -149,9 +169,11 @@ export function ProjectDetailPage() {
   const { project, members, aiAnalysis, latestSubmission } = data;
   const canEdit = isStudent && ['assigned', 'changes_requested'].includes(project.Status);
   const canSubmit = isStudent && ['assigned', 'changes_requested'].includes(project.Status);
-  const canReview = (isTeacher || isAdmin) && ['submitted', 'under_review'].includes(project.Status);
+  const canReview = (isTeacher || isAdmin)
+    && ['pending_teacher', 'submitted', 'under_review'].includes(project.Status);
   const isPendingTeacher = project.Status === 'pending_teacher';
   const isRejected = project.Status === 'rejected';
+  const needsChanges = project.Status === 'changes_requested';
   const rejectionReason = (project as { RejectionReason?: string }).RejectionReason;
 
   const rejectionReasons = (() => {
@@ -178,38 +200,63 @@ export function ProjectDetailPage() {
         profileImageUrl: (project as { OwnerProfileImageUrl?: string }).OwnerProfileImageUrl,
       };
 
+  const ownerStudentId = Number(
+    (project as { OwnerStudentUserId?: number; OwnerStudentId?: number }).OwnerStudentUserId
+    || project.OwnerStudentId
+    || 0,
+  ) || null;
+
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-6 pb-24">
       <Link to="/projects" className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-800">
         <ArrowLeft size={16} /> Back to My Projects
       </Link>
 
-      <div className="bg-white rounded-xl border p-5">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <span className="font-mono text-sm font-bold text-green-700">{project.TeacherAssignedId}</span>
-            <h1 style={{ fontSize: 22, fontWeight: 800, marginTop: 4 }}>{project.Title}</h1>
-            <p style={{ fontSize: 13, color: '#64748B', marginTop: 4 }}>
-              Assigned: {new Date(project.AssignedAt).toLocaleString()}
-              {latestSubmission && ` · Submitted: ${new Date(latestSubmission.SubmittedAt).toLocaleString()}`}
-            </p>
-          </div>
-          <span className="px-3 py-1 rounded-full text-xs font-bold capitalize bg-blue-50 text-blue-700">
+      <motion.header
+        className="project-head"
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4 }}
+      >
+        <div className="project-head__top">
+          <span className="project-head__code">{project.TeacherAssignedId}</span>
+          <span className={`project-head__status project-head__status--${statusTone(project.Status)}`}>
             {project.Status.replace(/_/g, ' ')}
           </span>
         </div>
-      </div>
+        <h1>{project.Title}</h1>
+        <dl className="project-head__meta">
+          <div>
+            <dt><CalendarClock size={13} /> Assigned</dt>
+            <dd>{new Date(project.AssignedAt).toLocaleString()}</dd>
+          </div>
+          {latestSubmission && (
+            <div>
+              <dt><Send size={13} /> Submitted</dt>
+              <dd>{new Date(latestSubmission.SubmittedAt).toLocaleString()}</dd>
+            </div>
+          )}
+          <div>
+            <dt><Users size={13} /> Team</dt>
+            <dd>{members.length} {members.length === 1 ? 'member' : 'members'}</dd>
+          </div>
+        </dl>
+      </motion.header>
 
       {isPendingTeacher && isStudent && (
-        <div className="rounded-xl border p-4 text-sm text-gray-800" style={{ background: '#f0fdf4', borderColor: '#bbf7d0' }}>
-          Awaiting teacher decision
+        <div className="flex items-center gap-3 rounded-xl border p-4 text-sm font-semibold"
+          style={{ background: 'linear-gradient(180deg,#fffdf5,#fff7e6)', borderColor: '#fde3ac', color: '#92400e' }}>
+          <WaitingMark size={22} />
+          Waiting for your teacher to review this project. You will be notified as soon as a decision is made.
         </div>
       )}
 
-      {isRejected && rejectionReason && (
-        <div className="bg-red-50 border border-red-200 rounded-xl p-4">
-          <h3 className="font-bold text-red-800 text-sm">Rejection Reason</h3>
-          <p className="text-sm text-red-700 mt-1">{rejectionReason}</p>
+      {(isRejected || needsChanges) && rejectionReason && (
+        <div className={`rounded-xl border p-4 ${isRejected ? 'border-red-200 bg-red-50' : 'border-amber-200 bg-amber-50'}`}>
+          <h3 className={`text-sm font-bold ${isRejected ? 'text-red-800' : 'text-amber-800'}`}>
+            {isRejected ? 'Why this project was rejected' : 'Changes requested by your teacher'}
+          </h3>
+          <p className={`mt-1 text-sm ${isRejected ? 'text-red-700' : 'text-amber-700'}`}>{rejectionReason}</p>
         </div>
       )}
 
@@ -231,6 +278,7 @@ export function ProjectDetailPage() {
             email: (project as { OwnerEmail?: string }).OwnerEmail,
             profileImageUrl: (project as { OwnerProfileImageUrl?: string }).OwnerProfileImageUrl,
             role: 'student',
+            userId: ownerStudentId,
           } : undefined}
           projectTitle={project.Title}
           projectId={projectId}
@@ -239,18 +287,42 @@ export function ProjectDetailPage() {
       )}
 
       {/* Team members */}
-      <div className="bg-white rounded-xl border p-5">
-        <div className="flex items-center gap-2 mb-3">
-          <Users size={16} className="text-blue-600" />
-          <h3 style={{ fontSize: 15, fontWeight: 700 }}>Team Members</h3>
+      <div className="project-panel">
+        <div className="project-panel__head">
+          <span className="project-panel__icon"><Users size={16} /></span>
+          <h3>Team members</h3>
+          <span className="project-panel__count">{members.length}</span>
         </div>
-        <div className="flex flex-wrap gap-2">
-          {members.map(m => (
-            <span key={m.UserId} className="px-3 py-1.5 rounded-lg bg-gray-100 text-sm font-medium">
-              {m.FirstName} {m.LastName} ({m.UniversityId})
-            </span>
-          ))}
-        </div>
+        {members.length === 0 ? (
+          <p className="project-panel__hint">No teammates yet. Invite a classmate by their HU ID.</p>
+        ) : (
+          <ul className="team-chips">
+            {members.map(m => {
+              const chip = (
+                <>
+                  <UserAvatar
+                    firstName={String(m.FirstName || '')}
+                    lastName={String(m.LastName || '')}
+                    profileImageUrl={(m as { ProfileImageUrl?: string | null }).ProfileImageUrl}
+                    role="student"
+                    size="sm"
+                  />
+                  <div>
+                    <strong>{m.FirstName} {m.LastName}</strong>
+                    <em>{m.UniversityId}</em>
+                  </div>
+                </>
+              );
+              return (
+                <li key={m.UserId} className="team-chip">
+                  {isTeacher || isAdmin ? (
+                    <Link to={`/students/${m.UserId}`} className="team-chip__link">{chip}</Link>
+                  ) : chip}
+                </li>
+              );
+            })}
+          </ul>
+        )}
         {canEdit && (
           <div className="mt-3 space-y-3">
             <UniversityIdLookup
@@ -318,12 +390,12 @@ export function ProjectDetailPage() {
         </div>
       )}
 
-      {/* Athena AI Analysis — teachers and admins only */}
+      {/* Similarity analysis — teachers and admins only */}
       {aiAnalysis && isTeacher && (
         <div className="bg-gradient-to-br from-green-50 to-blue-50 rounded-xl border border-green-200 p-5">
           <div className="flex items-center gap-2 mb-4">
-            <Sparkles size={18} className="text-green-600" />
-            <h3 style={{ fontSize: 15, fontWeight: 700, color: '#16A34A' }}>Athena AI Analysis (Advisory)</h3>
+            <CheckCircle2 size={18} className="text-green-600" />
+            <h3 style={{ fontSize: 15, fontWeight: 700, color: '#16A34A' }}>Similarity analysis (advisory)</h3>
           </div>
           <div className="flex gap-6 items-center">
             <ProgressRing value={Number(aiAnalysis.UniquenessScore)} size={90} label="Unique" />
@@ -350,6 +422,7 @@ export function ProjectDetailPage() {
       {isTeacher && (
         <ProjectAIAssistant
           projectId={projectId}
+          review={canReview ? { busy: reviewing, onSubmit: handleReview } : undefined}
           onAnalysisUpdated={async () => {
             try {
               const da = await api.getDocumentAnalyses(projectId);
@@ -398,27 +471,9 @@ export function ProjectDetailPage() {
         />
       )}
 
-      {/* Teacher review */}
-      {canReview && (
-        <div className="bg-white rounded-xl border p-5 space-y-3">
-          <h3 style={{ fontSize: 15, fontWeight: 700 }}>Teacher Review</h3>
-          <input value={rejectReason} onChange={e => setRejectReason(e.target.value)}
-            placeholder="Rejection description (required if rejecting)" className="w-full px-3 py-2 rounded-lg border text-sm" required />
-          <div className="flex gap-2 flex-wrap">
-            <button onClick={() => handleReview('approved')}
-              className="flex items-center gap-1 px-4 py-2 rounded-lg bg-green-600 text-white text-sm font-semibold">
-              <Check size={14} /> Approve
-            </button>
-            <button onClick={() => handleReview('changes_requested')}
-              className="flex items-center gap-1 px-4 py-2 rounded-lg bg-yellow-500 text-white text-sm font-semibold">
-              <Edit3 size={14} /> Request Changes
-            </button>
-            <button onClick={() => handleReview('rejected')}
-              className="flex items-center gap-1 px-4 py-2 rounded-lg bg-red-600 text-white text-sm font-semibold">
-              <X size={14} /> Reject
-            </button>
-          </div>
-        </div>
+      {/* Teachers decide inside the review card above; admins get the control here. */}
+      {canReview && !isTeacher && (
+        <ReviewDecisionPanel busy={reviewing} onSubmit={handleReview} />
       )}
 
       {isAdmin && (
@@ -431,14 +486,32 @@ export function ProjectDetailPage() {
       {canChat && (
         <>
           {isStudent && (
-            <div className="flex gap-2 mb-2">
-              <button type="button" onClick={() => setChatScope('teacher_student')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border ${chatScope === 'teacher_student' ? 'bg-blue-600 text-white' : 'bg-white'}`}>
-                Private (Teacher)
+            <div className="chat-scope" role="tablist" aria-label="Conversation type">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={chatScope === 'teacher_student'}
+                onClick={() => setChatScope('teacher_student')}
+                className={chatScope === 'teacher_student' ? 'is-active' : undefined}
+              >
+                <Lock size={14} />
+                <span>
+                  <strong>Private</strong>
+                  <em>You and your teacher</em>
+                </span>
               </button>
-              <button type="button" onClick={() => setChatScope('project_group')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border ${chatScope === 'project_group' ? 'bg-green-600 text-white' : 'bg-white'}`}>
-                Group (Team)
+              <button
+                type="button"
+                role="tab"
+                aria-selected={chatScope === 'project_group'}
+                onClick={() => setChatScope('project_group')}
+                className={chatScope === 'project_group' ? 'is-active' : undefined}
+              >
+                <UsersRound size={14} />
+                <span>
+                  <strong>Team</strong>
+                  <em>Everyone on the project</em>
+                </span>
               </button>
             </div>
           )}

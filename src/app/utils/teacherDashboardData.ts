@@ -65,8 +65,7 @@ export function buildRecentFeedback(submissions: Submission[]) {
     }));
 }
 
-export function buildAthenaTip(pending: number, collisions: number) {
-  if (pending > 0) return `${pending} submission(s) awaiting review — prioritize items with collision alerts.`;
-  if (collisions > 0) return `${collisions} collision alert(s) detected. Compare similar projects before approving.`;
+export function buildAthenaTip(pending: number, _collisions = 0) {
+  if (pending > 0) return `${pending} submission(s) awaiting review.`;
   return 'All caught up — no pending submissions in your queue.';
 }

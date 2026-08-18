@@ -39,7 +39,8 @@ export async function query(q, params = {}) {
 
 export async function testConnection() {
   try {
-    await getPool();
+    const p = await getPool();
+    await p.query('SELECT 1');
     return { ok: true, driver: 'postgres' };
   } catch (err) {
     return { ok: false, error: err.message, driver: 'postgres' };

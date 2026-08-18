@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { motion } from 'motion/react';
-import { Palette, Save, User, Camera, Trash2, Lock, Shield, Mail, LogOut } from 'lucide-react';
+import { Settings, Save, User, Camera, Trash2, Lock, Shield, Mail, LogOut, Bell } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { api, setToken } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { UserAvatar } from '../components/UserAvatar';
+import { usePushNotifications } from '../hooks/usePushNotifications';
 import type { Role } from '../types';
 
 const MAX_IMAGE_BYTES = 400_000;
@@ -13,13 +14,11 @@ export function SettingsPage() {
   const { user, refreshUser, logout } = useAuth();
   const navigate = useNavigate();
   const fileRef = useRef<HTMLInputElement>(null);
-  const [settings, setSettings] = useState<Record<string, string>>({});
   const [profile, setProfile] = useState({
     firstName: '', lastName: '', department: '', phone: '', bio: '', contactInfo: '',
     className: '', studyMode: 'full_time',
   });
   const [profileImageUrl, setProfileImageUrl] = useState<string | null>(null);
-  const [saved, setSaved] = useState(false);
   const [profileSaved, setProfileSaved] = useState(false);
   const [credentialsSaved, setCredentialsSaved] = useState(false);
   const [error, setError] = useState('');
@@ -27,17 +26,10 @@ export function SettingsPage() {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [adminEmail, setAdminEmail] = useState('');
+  const [notificationBusy, setNotificationBusy] = useState(false);
+  const notifications = usePushNotifications();
 
   const isAdmin = user?.Role === 'admin';
-
-  useEffect(() => {
-    api.getSettings().then(r => {
-      const map: Record<string, string> = {};
-      r.settings.forEach(s => { map[s.SettingKey] = s.SettingValue; });
-      setSettings(map);
-      applyTheme(map);
-    }).catch(e => setError(e.message));
-  }, []);
 
   useEffect(() => {
     if (user) {
@@ -54,12 +46,7 @@ export function SettingsPage() {
       setProfileImageUrl(user.ProfileImageUrl || null);
       setAdminEmail(user.Email || '');
     }
-  }, [user?.UserId, user?.ProfileImageUrl, user?.Email]);
-
-  const applyTheme = (s: Record<string, string>) => {
-    if (s.theme_primary) document.documentElement.style.setProperty('--primary', s.theme_primary);
-    if (s.theme_secondary) document.documentElement.style.setProperty('--accent', s.theme_secondary);
-  };
+  }, [user]);
 
   const handleImagePick = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -77,18 +64,6 @@ export function SettingsPage() {
     reader.readAsDataURL(file);
     setError('');
     e.target.value = '';
-  };
-
-  const handleSaveSettings = async () => {
-    if (!isAdmin) return;
-    try {
-      await api.updateSettings(settings);
-      applyTheme(settings);
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2000);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Save failed');
-    }
   };
 
   const handleSaveProfile = async () => {
@@ -149,25 +124,22 @@ export function SettingsPage() {
     }
   };
 
-  const themeKeys = [
-    { key: 'theme_primary', label: 'Primary Color (Green)' },
-    { key: 'theme_secondary', label: 'Secondary Color (Blue)' },
-    { key: 'theme_accent', label: 'Accent Color' },
-    { key: 'university_name', label: 'University Name' },
-    { key: 'logo_path', label: 'Logo Path' },
-    { key: 'ai_similarity_threshold', label: 'AI Similarity Threshold (%)' },
-  ];
-
   const role = (user?.Role || 'student') as Role;
+
+  const enableNotifications = async () => {
+    setNotificationBusy(true);
+    await notifications.subscribe();
+    setNotificationBusy(false);
+  };
 
   return (
     <div className="p-4 sm:p-6 max-w-2xl mx-auto space-y-6 pb-mobile-nav">
       <div className="flex items-center gap-2">
-        <Palette size={20} className="text-green-600" />
+        <Settings size={20} className="text-green-600" />
         <h1 style={{ fontSize: 22, fontWeight: 800 }}>Settings</h1>
       </div>
 
-      {error && <p className="text-sm text-red-600 bg-red-50 p-3 rounded-lg">{error}</p>}
+      {error && <p className="text-sm text-red-600 bg-red-50 p-3 rounded-lg" role="alert">{error}</p>}
 
       <div className="bg-white rounded-2xl border shadow-sm p-5 sm:p-6 space-y-5">
         <div className="flex items-center gap-2">
@@ -200,7 +172,7 @@ export function SettingsPage() {
         </div>
 
         <p className="text-xs text-gray-500">
-          {isAdmin ? user?.Email : `${user?.UniversityId} · ${user?.Email}`} · {user?.Role}
+          {isAdmin ? user?.Email : `${user?.UniversityId} · ${user?.Email ?? ''}`} · {user?.Role}
         </p>
 
         <div className="grid sm:grid-cols-2 gap-4">
@@ -272,12 +244,12 @@ export function SettingsPage() {
           <>
             <p className="text-sm text-gray-500 flex items-start gap-2">
               <Shield size={16} className="text-green-600 flex-shrink-0 mt-0.5" />
-              Email only — password is fixed
+              Email only. The administrator password is not changed from this screen.
             </p>
             <div>
               <label className="text-sm font-semibold text-gray-700">Login Email</label>
               <input type="email" value={adminEmail} onChange={e => setAdminEmail(e.target.value)}
-                placeholder="admin@hu.edu"
+                placeholder="you@hu.edu.so"
                 className="mt-1 w-full px-3 py-2.5 rounded-xl border text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/30" />
             </div>
             <div>
@@ -287,7 +259,7 @@ export function SettingsPage() {
             </div>
             <motion.button whileHover={{ scale: 1.02 }} onClick={handleSaveCredentials}
               className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-purple-600 text-white font-semibold text-sm">
-              <Mail size={16} /> {credentialsSaved ? 'Email Updated!' : 'Save Email'}
+              <Mail size={16} /> {credentialsSaved ? 'Email saved' : 'Save email'}
             </motion.button>
           </>
         ) : (
@@ -321,29 +293,36 @@ export function SettingsPage() {
       </div>
 
       <div className="bg-white rounded-2xl border shadow-sm p-5 sm:p-6 space-y-4">
-        <h2 className="font-bold text-lg">
-          App Settings {!isAdmin && <span className="text-xs text-gray-400 font-normal">(read-only)</span>}
-        </h2>
-        {themeKeys.map(({ key, label }) => (
-          <div key={key}>
-            <label style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>{label}</label>
-            <div className="flex gap-2 mt-1">
-              <input value={settings[key] || ''} onChange={e => setSettings(s => ({ ...s, [key]: e.target.value }))}
-                disabled={!isAdmin}
-                className="flex-1 px-3 py-2 rounded-lg border text-sm disabled:bg-gray-50" />
-              {key.startsWith('theme_') && settings[key] && (
-                <div className="w-10 h-10 rounded-lg border flex-shrink-0" style={{ background: settings[key] }} />
-              )}
-            </div>
-          </div>
-        ))}
-
-        {isAdmin && (
-          <motion.button whileHover={{ scale: 1.02 }} onClick={handleSaveSettings}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-green-600 text-white font-semibold text-sm">
-            <Save size={16} /> {saved ? 'Saved!' : 'Save to Database'}
-          </motion.button>
-        )}
+        <h2 className="font-bold text-lg">Notifications</h2>
+        <div>
+          <p className="text-sm font-semibold text-gray-700 mb-1">Push notifications</p>
+          <p className="text-xs text-gray-500 mb-3">
+            Enable these only if you want this device to show updates when ProjectHub is not open.
+          </p>
+          {!notifications.supported ? (
+            <p className="text-xs text-gray-500">Notifications are not supported in this browser.</p>
+          ) : notifications.subscribed ? (
+            <p className="inline-flex items-center gap-2 text-sm font-semibold text-green-700" role="status">
+              <Bell size={16} /> Notifications enabled
+            </p>
+          ) : notifications.permission === 'denied' ? (
+            <p className="text-xs text-amber-700" role="status">
+              Notifications are blocked. You can allow them from your browser’s site settings.
+            </p>
+          ) : (
+            <button
+              type="button"
+              onClick={enableNotifications}
+              disabled={notificationBusy}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+            >
+              <Bell size={16} /> {notificationBusy ? 'Enabling…' : 'Enable notifications'}
+            </button>
+          )}
+          {notifications.error && (
+            <p className="text-xs text-red-600 mt-2" role="alert">{notifications.error}</p>
+          )}
+        </div>
       </div>
 
       <div className="bg-white rounded-2xl border shadow-sm p-5 sm:p-6">

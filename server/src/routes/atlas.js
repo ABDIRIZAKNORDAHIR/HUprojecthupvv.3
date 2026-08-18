@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { query } from '../db.js';
+import { sendError } from '../utils/httpError.js';
 import { authMiddleware, attachUserDetails } from '../middleware/auth.js';
 
 const router = Router();
@@ -13,10 +14,8 @@ router.get('/check-topic', async (req, res) => {
 
     const like = `%${topic}%`;
     const matches = await query(
-      `SELECT TOP 5 p.ProjectId, p.Title, p.Status, p.Abstract,
-              s.FirstName + ' ' + s.LastName AS StudentName
+      `SELECT TOP 5 p.ProjectId, p.Title, p.Status
        FROM Projects p
-       LEFT JOIN Users s ON p.OwnerStudentId = s.UserId
        WHERE p.Title LIKE @like OR p.Abstract LIKE @like OR p.Description LIKE @like
        ORDER BY p.AssignedAt DESC`,
       { like }
@@ -31,29 +30,61 @@ router.get('/check-topic', async (req, res) => {
 
     res.json({ result, matches: rows });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, err);
   }
 });
 
 /** Project Atlas dashboard data */
 router.get('/data', async (req, res) => {
   try {
+    const role = req.user.role;
+    const userId = req.user.userId;
+    let visibility = '1 = 0';
+    let canIdentifyStudent = '1 = 0';
+    let canViewStudentId = '1 = 0';
+    if (role === 'admin') {
+      visibility = '1 = 1';
+      canIdentifyStudent = '1 = 1';
+      canViewStudentId = '1 = 1';
+    } else if (role === 'teacher') {
+      visibility = "(p.Status = 'approved' OR p.AssignedByTeacherId = @uid)";
+      canIdentifyStudent = "(p.Status = 'approved' OR p.AssignedByTeacherId = @uid)";
+      canViewStudentId = 'p.AssignedByTeacherId = @uid';
+    } else if (role === 'student') {
+      const participant = `(p.OwnerStudentId = @uid OR EXISTS (
+        SELECT 1 FROM ProjectMembers pm
+        WHERE pm.ProjectId = p.ProjectId AND pm.StudentId = @uid
+      ))`;
+      visibility = `(p.Status = 'approved' OR ${participant})`;
+      canIdentifyStudent = `(p.Status = 'approved' OR ${participant})`;
+      canViewStudentId = participant;
+    }
+
     const projects = await query(
       `SELECT p.ProjectId, p.TeacherAssignedId, p.Title, p.Abstract, p.Status, p.AssignedAt,
-              s.FirstName + ' ' + s.LastName AS StudentName, s.UniversityId AS StudentUniversityId,
-              s.Department, t.FirstName + ' ' + t.LastName AS TeacherName
+              CASE WHEN ${canIdentifyStudent} THEN s.FirstName + ' ' + s.LastName ELSE NULL END AS StudentName,
+              CASE WHEN ${canViewStudentId} THEN s.UniversityId ELSE NULL END AS StudentUniversityId,
+              CASE WHEN ${canIdentifyStudent} THEN s.Department ELSE NULL END AS Department,
+              t.FirstName + ' ' + t.LastName AS TeacherName
        FROM Projects p
        LEFT JOIN Users s ON p.OwnerStudentId = s.UserId
        JOIN Users t ON p.AssignedByTeacherId = t.UserId
-       ORDER BY p.AssignedAt DESC`
+       WHERE ${visibility}
+       ORDER BY p.AssignedAt DESC`,
+      { uid: userId }
     );
     const deptStats = await query(
       `SELECT ISNULL(s.Department, 'Other') AS dept, COUNT(*) AS count
        FROM Projects p LEFT JOIN Users s ON p.OwnerStudentId = s.UserId
-       GROUP BY ISNULL(s.Department, 'Other')`
+       WHERE ${visibility}
+       GROUP BY ISNULL(s.Department, 'Other')`,
+      { uid: userId }
     );
     const statusCounts = await query(
-      `SELECT Status, COUNT(*) AS count FROM Projects GROUP BY Status`
+      `SELECT p.Status, COUNT(*) AS count FROM Projects p
+       WHERE ${visibility}
+       GROUP BY p.Status`,
+      { uid: userId }
     );
     res.json({
       projects: projects.recordset,
@@ -61,7 +92,7 @@ router.get('/data', async (req, res) => {
       statusCounts: statusCounts.recordset,
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, err);
   }
 });
 

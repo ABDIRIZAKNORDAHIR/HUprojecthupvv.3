@@ -74,6 +74,15 @@ async function request<T>(
         code?: string;
       };
       if (!res.ok) {
+        // A 404 with no JSON body means the endpoint is missing on the running
+        // server, which normally happens when the API was not restarted.
+        if (res.status === 404 && !data.error && !data.message) {
+          lastError = new ApiError(
+            'This feature is not available on the running server. Restart the ProjectHub API and try again.',
+            'STALE_API',
+          );
+          continue;
+        }
         const detail = [data.error || data.message || `Request failed (${res.status})`, data.hint]
           .filter(Boolean)
           .join(' — ');
@@ -111,6 +120,20 @@ export async function checkApiConnection(): Promise<boolean> {
   }
 }
 
+export interface OtpDelivery {
+  message: string;
+  /** Normalized email address the code belongs to. */
+  identity: string;
+  email: string | null;
+  expiresInMinutes: number;
+  emailed: boolean;
+  /** The address the code was sent to. */
+  deliveredTo: string;
+  notice?: string | null;
+  /** Development only — shown when no mailbox is configured. Never set in production. */
+  devCode?: string | null;
+}
+
 export interface User {
   UserId: number;
   UniversityId: string;
@@ -125,15 +148,47 @@ export interface User {
   ContactInfo?: string | null;
   ClassName?: string | null;
   StudyMode?: 'full_time' | 'part_time' | string | null;
+  Specialty?: string | null;
   AccountStatus?: string;
-  PlainPassword?: string | null;
   LastLoginAt?: string | null;
   IsOnline?: boolean;
+}
+
+export interface TeacherStudentBarometers {
+  uniqueness: number | null;
+  similarity: number | null;
+  quality: number | null;
+  projectMark: number | null;
+  assignmentMark: number | null;
+  assignmentBonus: number | null;
+  gradedAssignments: number;
+}
+
+export interface TeacherStudentProject {
+  ProjectId: number;
+  Title: string;
+  Status: string;
+  AssignedAt?: string;
+  SubmittedAt?: string;
+  UniquenessScore?: number | null;
+  SimilarityPercent?: number | null;
+  QualityScore?: number | null;
+  Grade?: number | null;
+  Feedback?: string | null;
+}
+
+export interface TeacherStudent extends User {
+  projectCount: number;
+  viaProjects?: boolean;
+  viaClass?: boolean;
+  barometers: TeacherStudentBarometers;
+  projects: TeacherStudentProject[];
 }
 
 export interface DocumentAnalysis {
   DocumentAnalysisId?: number;
   FileName: string;
+  FileType?: string;
   Summary?: string;
   MainTopic?: string;
   KeyPoints?: string | string[];
@@ -158,6 +213,7 @@ export interface Project {
   UpdatedAt?: string;
   TeacherName?: string;
   TeacherUniversityId?: string;
+  TeacherProfileImageUrl?: string | null;
   OwnerName?: string;
   OwnerUniversityId?: string;
 }
@@ -186,82 +242,75 @@ export const api = {
       body: JSON.stringify({
         email,
         password,
+        website: '',
         ...(portalRole === 'admin'
           ? { portalRole: 'admin', adminLoginToken }
           : { universityId: universityId || undefined }),
       }),
     }),
 
-  requestRegisterOtp: (data: { universityId: string; email: string; role?: 'student' | 'teacher' }) =>
-    request<{
-      message: string;
-      email: string;
-      expiresInMinutes: number;
-      emailed: boolean;
-    }>('/auth/register/request-otp', {
+  requestRegisterOtp: (data: {
+    universityId: string;
+    email: string;
+    role?: 'student' | 'teacher';
+  }) =>
+    request<OtpDelivery>('/auth/register/request-otp', {
       method: 'POST',
-      body: JSON.stringify(data),
+      body: JSON.stringify({ ...data, website: '' }),
       timeoutMs: 60000,
     }),
 
   verifyRegisterOtp: (data: { email: string; code: string }) =>
     request<{
       registrationToken: string;
-      email: string;
+      identity: string;
+      email: string | null;
       universityId: string;
       role: string;
       message: string;
     }>('/auth/register/verify-otp', {
       method: 'POST',
-      body: JSON.stringify(data),
+      body: JSON.stringify({ ...data, website: '' }),
       timeoutMs: 30000,
     }),
 
   requestAdminOtp: (email: string) =>
-    request<{
-      message: string;
-      email: string;
-      expiresInMinutes: number;
-      emailed: boolean;
-    }>('/auth/admin/request-otp', {
+    request<OtpDelivery>('/auth/admin/request-otp', {
       method: 'POST',
-      body: JSON.stringify({ email }),
+      body: JSON.stringify({ email, website: '' }),
       timeoutMs: 60000,
     }),
 
   verifyAdminOtp: (data: { email: string; code: string }) =>
     request<{ adminLoginToken: string; email: string; message: string }>(
       '/auth/admin/verify-otp',
-      { method: 'POST', body: JSON.stringify(data), timeoutMs: 30000 },
+      { method: 'POST', body: JSON.stringify({ ...data, website: '' }), timeoutMs: 30000 },
     ),
 
-  requestPasswordResetOtp: (data: { email: string; role: 'student' | 'teacher' | 'admin' }) =>
-    request<{
-      message: string;
-      email: string;
-      expiresInMinutes: number;
-      emailed: boolean;
-    }>('/auth/password-reset/request-otp', {
+  requestPasswordResetOtp: (data: {
+    email: string;
+    role: 'student' | 'teacher' | 'admin';
+  }) =>
+    request<OtpDelivery>('/auth/password-reset/request-otp', {
       method: 'POST',
-      body: JSON.stringify(data),
+      body: JSON.stringify({ ...data, website: '' }),
       timeoutMs: 60000,
     }),
 
   verifyPasswordResetOtp: (data: { email: string; code: string }) =>
-    request<{ resetToken: string; email: string; message: string }>(
+    request<{ resetToken: string; identity: string; email: string | null; message: string }>(
       '/auth/password-reset/verify-otp',
-      { method: 'POST', body: JSON.stringify(data), timeoutMs: 30000 },
+      { method: 'POST', body: JSON.stringify({ ...data, website: '' }), timeoutMs: 30000 },
     ),
 
   confirmPasswordReset: (data: { resetToken: string; newPassword: string; confirmPassword?: string }) =>
     request<{ message: string; email: string; role: string }>(
       '/auth/password-reset/confirm',
-      { method: 'POST', body: JSON.stringify(data), timeoutMs: 30000 },
+      { method: 'POST', body: JSON.stringify({ ...data, website: '' }), timeoutMs: 30000 },
     ),
 
   register: (data: {
     universityId: string;
-    email: string;
     password: string;
     firstName: string;
     lastName: string;
@@ -269,11 +318,12 @@ export const api = {
     role?: 'student' | 'teacher';
     className?: string;
     studyMode?: 'full_time' | 'part_time';
+    email: string;
     registrationToken: string;
   }) =>
     request<{ token?: string; user: User; pendingApproval?: boolean; message: string }>('/auth/register', {
       method: 'POST',
-      body: JSON.stringify(data),
+      body: JSON.stringify({ ...data, website: '' }),
     }),
 
   me: () => request<{ user: User }>('/auth/me'),
@@ -396,7 +446,7 @@ export const api = {
       { method: 'DELETE' }
     ),
 
-  updateAdminUserAccount: (userId: number, data: { universityId?: string; password?: string }) =>
+  updateAdminUserAccount: (userId: number, data: { universityId?: string; email?: string; password?: string }) =>
     request<{ message: string; user: User }>(`/admin/users/${userId}/account`, {
       method: 'PUT',
       body: JSON.stringify(data),
@@ -422,6 +472,37 @@ export const api = {
         collidesWith: string;
         action: 'Approve' | 'Review' | 'Reject';
         aiSuggestion: string;
+        isOriginal?: boolean;
+        universityId?: string;
+        department?: string;
+        className?: string;
+        studyMode?: string;
+        photo?: string | null;
+        assignedAt?: string | null;
+        originalOwner?: {
+          projectId: number | null;
+          teacherAssignedId: string | null;
+          title: string;
+          status: string;
+          claimedAt: string | null;
+          studentId: number | null;
+          name: string;
+          universityId: string;
+          department: string;
+          className: string;
+          studyMode: string;
+          photo: string | null;
+        } | null;
+        laterCopies?: Array<{
+          projectId: number | null;
+          name: string;
+          universityId: string;
+          department: string;
+          className: string;
+          photo: string | null;
+          title: string;
+          similarity?: number;
+        }>;
       }>;
     }>('/admin/batch-scan', { method: 'POST', body: JSON.stringify({ projectIds }) }),
 
@@ -442,10 +523,20 @@ export const api = {
 
   getAdminStats: () => request<Record<string, unknown>>('/admin/stats'),
 
-  getSettings: () => request<{ settings: Array<{ SettingKey: string; SettingValue: string }> }>('/settings'),
-
-  updateSettings: (settings: Record<string, string>) =>
-    request<{ message: string }>('/settings', { method: 'PUT', body: JSON.stringify({ settings }) }),
+  getAdminAuditLogs: () => request<{
+    logs: Array<{
+      AuditLogId: number;
+      Action: string;
+      EntityType?: string | null;
+      EntityId?: string | null;
+      MetadataJson?: string | null;
+      IpAddress?: string | null;
+      CreatedAt: string;
+      FirstName?: string | null;
+      LastName?: string | null;
+      Role?: string | null;
+    }>;
+  }>('/admin/audit-logs'),
 
   getInvitations: () =>
     request<{ invitations: Array<{ InvitationId: number; ProjectId: number; Title: string; TeacherAssignedId: string; InvitedByName?: string; InvitedByUniversityId?: string; CreatedAt?: string }> }>(
@@ -496,7 +587,15 @@ export const api = {
       '/student/teachers'
     ),
 
-  proposeProject: (data: { teacherId?: number; teacherUniversityId?: string; title: string; abstract?: string; description?: string }) =>
+  proposeProject: (data: {
+    teacherId?: number;
+    teacherUniversityId?: string;
+    title: string;
+    abstract?: string;
+    description?: string;
+    attachmentName?: string;
+    attachmentData?: string;
+  }) =>
     request<{ project: Project; message: string; teacher?: Record<string, unknown> }>('/student/propose-project', {
       method: 'POST', body: JSON.stringify(data),
     }),
@@ -517,13 +616,23 @@ export const api = {
   getTeacherAssignmentRequests: () =>
     request<{ requests: Array<Record<string, unknown>> }>('/teacher/assignment-requests'),
 
-  respondToAssignment: (projectId: number, data: { action: 'accept' | 'reject'; rejectionReason?: string }) =>
+  respondToAssignment: (
+    projectId: number,
+    data: {
+      action: 'accept' | 'reject' | 'request_changes';
+      rejectionReason?: string;
+      message?: string;
+    },
+  ) =>
     request<{ message: string; status: string }>(`/teacher/assignment-requests/${projectId}/respond`, {
       method: 'POST', body: JSON.stringify(data),
     }),
 
   getTeacherNotifications: () =>
     request<{ notifications: Array<Record<string, unknown>> }>('/teacher/notifications'),
+
+  getTeacherStudents: () =>
+    request<{ students: TeacherStudent[] }>('/teacher/students'),
 
   getAdminLive: () =>
     request<{
@@ -669,9 +778,31 @@ export const api = {
     request<{ assignments: Array<Record<string, unknown>> }>('/class-assignments/teacher'),
 
   getClassAssignmentSubmissions: (assignmentId: number) =>
-    request<{ assignment: Record<string, unknown>; submissions: Array<Record<string, unknown>> }>(
+    request<{
+      assignment: Record<string, unknown>;
+      submissions: Array<Record<string, unknown>>;
+      awaiting?: Array<Record<string, unknown>>;
+    }>(
       `/class-assignments/${assignmentId}/submissions`,
     ),
+
+  getClassAssignmentSubmissionFile: (submissionId: number) =>
+    request<{ name: string; data: string }>(
+      `/class-assignments/submissions/${submissionId}/file`,
+      { timeoutMs: 60000 },
+    ),
+
+  gradeClassAssignmentSubmission: (
+    submissionId: number,
+    data: { score: number; bonusPoints?: number; feedback?: string },
+  ) =>
+    request<{
+      message: string;
+      grade: { score: number; bonusPoints: number; finalScore: number; feedback: string | null };
+    }>(`/class-assignments/submissions/${submissionId}/grade`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
 
   getStudentClassAssignments: () =>
     request<{
@@ -686,34 +817,6 @@ export const api = {
     data: { content: string; attachmentName?: string; attachmentData?: string },
   ) =>
     request<{ message: string }>(`/class-assignments/${assignmentId}/submit`, {
-      method: 'POST',
-      body: JSON.stringify(data),
-    }),
-
-  getStudentCoachStatus: () =>
-    request<{ configured: boolean; provider?: string; model?: string; mode?: string; message?: string }>(
-      '/student/ai-coach/status',
-    ),
-
-  studentCoachAdvise: (data: {
-    title?: string;
-    abstract?: string;
-    question?: string;
-    history?: Array<{ role: string; content: string }>;
-  }) =>
-    request<{ ok: boolean; answer: string; provider?: string; model?: string; warning?: string }>(
-      '/student/ai-coach/advise',
-      { method: 'POST', body: JSON.stringify(data), timeoutMs: 120000 },
-    ),
-
-  studentCoachOriginality: (data: { title?: string; abstract?: string }) =>
-    request<{
-      originalityScore: number;
-      similarityPercent: number;
-      tip: string;
-      engine?: string;
-      similarProject?: { projectId: number; title: string; teacherAssignedId: string } | null;
-    }>('/student/ai-coach/originality', {
       method: 'POST',
       body: JSON.stringify(data),
     }),

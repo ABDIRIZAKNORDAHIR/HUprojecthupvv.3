@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { motion } from "motion/react";
-import { Users, Activity, Globe, Sparkles, CheckCircle2, Circle, BarChart3, Trash2, Link2, UserPlus, GraduationCap } from "lucide-react";
+import { Users, Activity, Globe, CheckCircle2, Circle, BarChart3, Trash2, Link2, UserPlus, GraduationCap, ShieldCheck, ServerCog, ScanSearch } from "lucide-react";
 import { Link } from "react-router";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -14,8 +13,10 @@ import { AdminCredentialsPanel } from "./AdminCredentialsPanel";
 import { AdminDeleteDialog, type DeleteTarget } from "./AdminDeleteDialog";
 import { api } from "../api/client";
 import { formatUniversityId } from "../utils/universityId";
+import { projectStatusLabel } from "../utils/mapSubmissions";
 import { PageHero } from "./PageHero";
-import { APP_IMAGES } from "../config/appImages";
+import { WaitingBadge, WaitingMark } from "./WaitingIcon";
+import { HU_IMAGES } from "../config/appImages";
 import type { ViewId } from "../types";
 
 interface AdminDashboardProps {
@@ -52,7 +53,7 @@ export function AdminDashboard({ activeView }: AdminDashboardProps) {
   if (activeView !== "dashboard") {
     return (
       <div className="p-6 max-w-screen-2xl mx-auto">
-        <p className="text-gray-500">Use sidebar navigation for admin tools.</p>
+        <p className="text-sm font-semibold text-slate-600">Open an administration tool from the sidebar.</p>
       </div>
     );
   }
@@ -66,7 +67,7 @@ export function AdminDashboard({ activeView }: AdminDashboardProps) {
     count: Number(r.count),
   }));
   const projectChartData = (charts?.projectsByStatus || []).map(p => ({
-    name: String(p.Status || 'unknown'),
+    name: projectStatusLabel(p.Status),
     count: Number(p.count),
   }));
   const loginChartData = (charts?.weeklyLogins || []).map(d => ({
@@ -77,7 +78,7 @@ export function AdminDashboard({ activeView }: AdminDashboardProps) {
     dept: String(d.dept),
     students: Number(d.count),
   }));
-  const PIE_COLORS = ['#7C3AED', '#2563EB', '#16A34A', '#EAB308', '#EA580C', '#64748B'];
+  const PIE_COLORS = ['#0F2D5C', '#2563EB', '#10B981', '#0F766E', '#F59E0B', '#64748B'];
 
   const exportReport = (format: 'excel' | 'pdf') => {
     const sections = buildAdminReportSections(live, stats);
@@ -103,12 +104,13 @@ export function AdminDashboard({ activeView }: AdminDashboardProps) {
   };
 
   return (
-    <div className="p-4 sm:p-6 space-y-6 max-w-screen-2xl mx-auto pb-mobile-nav">
+    <div className="dashboard-canvas space-y-6 pb-mobile-nav">
       <PageHero
-        title="Admin"
-        subtitle={`${live?.onlineCount || 0} online · ${studentCount} students`}
-        image={APP_IMAGES.campusGroup}
-        gradient={`linear-gradient(135deg, rgba(15,45,92,0.94), rgba(22,128,85,0.9))`}
+        icon={ShieldCheck}
+        eyebrow="Administration"
+        title="University operations"
+        subtitle={`${live?.onlineCount || 0} signed in · ${studentCount} students · accounts, reviews, and campus activity.`}
+        image={HU_IMAGES.campus}
       >
         <ExportButtons
           variant="onDark"
@@ -122,11 +124,31 @@ export function AdminDashboard({ activeView }: AdminDashboardProps) {
         <p className="text-sm text-red-700 font-semibold bg-red-50 p-3 rounded-xl border border-red-100">{loadErr}</p>
       )}
 
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <Link to="/admin/users" className="assignment-card flex items-center gap-3 !p-4">
+          <span className="grid h-11 w-11 place-items-center rounded-xl bg-blue-100 text-blue-800"><ShieldCheck size={20} /></span>
+          <div>
+            <p className="font-bold text-sm">User governance</p>
+            {pendingAccounts
+              ? <WaitingBadge size={11} className="mt-1">{pendingAccounts} account{pendingAccounts === 1 ? '' : 's'} waiting</WaitingBadge>
+              : <p className="text-xs text-gray-500">No approvals waiting</p>}
+          </div>
+        </Link>
+        <Link to="/admin/health" className="assignment-card flex items-center gap-3 !p-4">
+          <span className="grid h-11 w-11 place-items-center rounded-xl bg-blue-50 text-blue-800"><ServerCog size={20} /></span>
+          <div><p className="font-bold text-sm">System health</p><p className="text-xs text-gray-500">Audit services and activity</p></div>
+        </Link>
+        <Link to="/batch-scanner" className="assignment-card flex items-center gap-3 !p-4">
+          <span className="grid h-11 w-11 place-items-center rounded-xl bg-teal-100 text-teal-700"><ScanSearch size={20} /></span>
+          <div><p className="font-bold text-sm">Originality scanner</p><p className="text-xs text-gray-500">Identify the original owner of a topic</p></div>
+        </Link>
+      </div>
+
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-        <KPICard title="Online Now" value={live?.onlineCount || 0} icon={Globe} iconColor="#7C3AED" iconBg="#F5F3FF" index={0} />
-        <KPICard title="Students" value={studentCount} icon={Users} iconColor="#168055" iconBg="#F0FDF4" index={1} />
-        <KPICard title="Pending Review" value={pendingReview} icon={Sparkles} iconColor="#EAB308" iconBg="#FEFCE8" index={2} />
-        <KPICard title="Pending Accounts" value={pendingAccounts} icon={Users} iconColor="#EA580C" iconBg="#FFF7ED" index={3} />
+        <KPICard title="Signed in now" value={live?.onlineCount || 0} icon={Globe} iconColor="#10B981" iconBg="#ECFDF5" index={0} />
+        <KPICard title="Students" value={studentCount} icon={Users} iconColor="#0F2D5C" iconBg="#EFF6FF" index={1} />
+        <KPICard title="Waiting for review" value={pendingReview} icon={WaitingMark} iconColor="#B45309" iconBg="#FFF7E6" index={2} />
+        <KPICard title="Accounts waiting" value={pendingAccounts} icon={WaitingMark} iconColor="#B45309" iconBg="#FFF7E6" index={3} />
         <KPICard title="Assignment Requests" value={(stats?.pendingAssignments as number) || 0} icon={Activity} iconColor="#2563EB" iconBg="#EFF6FF" index={4} />
       </div>
 
@@ -167,7 +189,7 @@ export function AdminDashboard({ activeView }: AdminDashboardProps) {
                 <XAxis dataKey="name" tick={{ fontSize: 11 }} />
                 <YAxis allowDecimals={false} />
                 <Tooltip />
-                <Bar dataKey="count" fill="#2563EB" radius={[6, 6, 0, 0]} />
+                <Bar dataKey="count" fill="#0F2D5C" radius={[6, 6, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -179,7 +201,7 @@ export function AdminDashboard({ activeView }: AdminDashboardProps) {
                 <XAxis dataKey="day" tick={{ fontSize: 10 }} />
                 <YAxis allowDecimals={false} />
                 <Tooltip />
-                <Line type="monotone" dataKey="logins" stroke="#7C3AED" strokeWidth={2} dot={{ r: 3 }} />
+                <Line type="monotone" dataKey="logins" stroke="#10B981" strokeWidth={3} dot={{ r: 3 }} />
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -191,7 +213,7 @@ export function AdminDashboard({ activeView }: AdminDashboardProps) {
                 <XAxis type="number" allowDecimals={false} />
                 <YAxis type="category" dataKey="dept" width={80} tick={{ fontSize: 11 }} />
                 <Tooltip />
-                <Bar dataKey="students" fill="#16A34A" radius={[0, 6, 6, 0]} />
+              <Bar dataKey="students" fill="#2563EB" radius={[0, 6, 6, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>

@@ -7,7 +7,11 @@ import { query, getPool } from './db.js';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 
-const PASSWORD = 'ProjectHub123!';
+if (process.env.NODE_ENV === 'production') {
+  throw new Error('Demo seeding is disabled in production');
+}
+
+const PASSWORD = process.env.DEMO_PASSWORD || 'ProjectHub123!';
 
 /** 1 admin + 5 teachers + 10 students */
 const users = [
@@ -42,17 +46,17 @@ async function seed() {
     if (existing.recordset.length) {
       userIds[u.universityId] = existing.recordset[0].UserId;
       await query(
-        `UPDATE Users SET UniversityId = @universityId, PasswordHash = @hash, PlainPassword = @plain, Email = @email, FirstName = @firstName, LastName = @lastName,
+        `UPDATE Users SET UniversityId = @universityId, PasswordHash = @hash, Email = @email, FirstName = @firstName, LastName = @lastName,
          Role = @role, Department = @department, Specialty = @specialty, ClassName = @className, StudyMode = @studyMode, IsActive = 1, AccountStatus = 'approved' WHERE Email = @email`,
-        { universityId: u.universityId, hash, plain: PASSWORD, email: u.email, firstName: u.firstName, lastName: u.lastName, role: u.role, department: u.department, specialty: u.specialty || null, className: u.className || null, studyMode: u.studyMode || null }
+        { universityId: u.universityId, hash, email: u.email, firstName: u.firstName, lastName: u.lastName, role: u.role, department: u.department, specialty: u.specialty || null, className: u.className || null, studyMode: u.studyMode || null }
       );
       console.log(`  Updated ${u.role}: ${u.universityId} / ${u.email}`);
       continue;
     }
     const r = await query(
-      `INSERT INTO Users (UniversityId, Email, PasswordHash, PlainPassword, FirstName, LastName, Role, Department, Specialty, ClassName, StudyMode, IsActive, AccountStatus)
-       OUTPUT INSERTED.UserId VALUES (@universityId, @email, @hash, @plain, @firstName, @lastName, @role, @department, @specialty, @className, @studyMode, 1, 'approved')`,
-      { universityId: u.universityId, email: u.email, hash, plain: PASSWORD, firstName: u.firstName, lastName: u.lastName, role: u.role, department: u.department, specialty: u.specialty || null, className: u.className || null, studyMode: u.studyMode || null }
+      `INSERT INTO Users (UniversityId, Email, PasswordHash, FirstName, LastName, Role, Department, Specialty, ClassName, StudyMode, IsActive, AccountStatus)
+       OUTPUT INSERTED.UserId VALUES (@universityId, @email, @hash, @firstName, @lastName, @role, @department, @specialty, @className, @studyMode, 1, 'approved')`,
+      { universityId: u.universityId, email: u.email, hash, firstName: u.firstName, lastName: u.lastName, role: u.role, department: u.department, specialty: u.specialty || null, className: u.className || null, studyMode: u.studyMode || null }
     );
     userIds[u.universityId] = r.recordset[0].UserId;
     console.log(`  Created ${u.role}: ${u.universityId} / ${u.email}`);

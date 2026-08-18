@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { query } from '../db.js';
+import { sendError } from '../utils/httpError.js';
 import { authMiddleware, attachUserDetails } from '../middleware/auth.js';
 import { normalizeUniversityId } from '../utils/universityId.js';
 import { canUsersChat } from '../utils/chatAccess.js';
@@ -33,7 +34,7 @@ router.get('/search', async (req, res) => {
     const users = result.recordset.filter(u => canUsersChat(req.user.role, u.Role));
     res.json({ users });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, err);
   }
 });
 
@@ -43,7 +44,7 @@ router.get('/:userId/profile', async (req, res) => {
     const userId = parseInt(req.params.userId, 10);
     const user = await query(
       `SELECT UserId, UniversityId, Email, FirstName, LastName, Role, Department,
-              Phone, Bio, ContactInfo, ProfileImageUrl, Specialty
+              Phone, Bio, ContactInfo, ProfileImageUrl, Specialty, ClassName, StudyMode
        FROM Users WHERE UserId = @userId AND IsActive = 1`,
       { userId }
     );
@@ -64,7 +65,7 @@ router.get('/:userId/profile', async (req, res) => {
       currentProjects: projects.recordset,
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, err);
   }
 });
 

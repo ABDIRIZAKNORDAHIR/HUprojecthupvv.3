@@ -27,6 +27,30 @@ async function deleteProjectsCascade(projectIds) {
       { projectId }
     );
     await query('DELETE FROM AIAnalyses WHERE ProjectId = @projectId', { projectId });
+    await query('DELETE FROM DocumentAnalyses WHERE ProjectId = @projectId', { projectId });
+    await query('DELETE FROM ProjectAIChatMessages WHERE ProjectId = @projectId', { projectId });
+    await query('DELETE FROM ProjectEvaluations WHERE ProjectId = @projectId', { projectId });
+    await query(
+      `DELETE FROM DocumentAnalyses WHERE ConversationMessageId IN (
+         SELECT cm.ConversationMessageId FROM ConversationMessages cm
+         JOIN Conversations c ON c.ConversationId = cm.ConversationId
+         WHERE c.ProjectId = @projectId
+       )`,
+      { projectId }
+    );
+    await query(
+      `DELETE FROM ConversationMessages WHERE ConversationId IN (
+         SELECT ConversationId FROM Conversations WHERE ProjectId = @projectId
+       )`,
+      { projectId }
+    );
+    await query(
+      `DELETE FROM ConversationMembers WHERE ConversationId IN (
+         SELECT ConversationId FROM Conversations WHERE ProjectId = @projectId
+       )`,
+      { projectId }
+    );
+    await query('DELETE FROM Conversations WHERE ProjectId = @projectId', { projectId });
     await query('DELETE FROM Submissions WHERE ProjectId = @projectId', { projectId });
     await query('DELETE FROM Messages WHERE ProjectId = @projectId', { projectId });
     await query('DELETE FROM ProjectInvitations WHERE ProjectId = @projectId', { projectId });
@@ -65,6 +89,50 @@ export async function permanentlyDeleteUser(targetUserId, targetRole) {
     { userId: targetUserId }
   );
   await query('DELETE FROM Notifications WHERE UserId = @userId', { userId: targetUserId });
+  await query('DELETE FROM PushSubscriptions WHERE UserId = @userId', { userId: targetUserId });
+  await query('DELETE FROM ProjectEvaluations WHERE StudentId = @userId OR TeacherId = @userId', { userId: targetUserId });
+  await query('DELETE FROM ProjectAIChatMessages WHERE TeacherId = @userId', { userId: targetUserId });
+  await query(
+    `DELETE FROM DocumentAnalyses WHERE ConversationMessageId IN (
+       SELECT ConversationMessageId FROM ConversationMessages WHERE SenderId = @userId
+     )`,
+    { userId: targetUserId }
+  );
+  await query('DELETE FROM ConversationMessages WHERE SenderId = @userId', { userId: targetUserId });
+  await query('DELETE FROM ConversationMembers WHERE UserId = @userId', { userId: targetUserId });
+
+  if (targetRole === 'teacher') {
+    await query(
+      `DELETE FROM ClassAssignmentSubmissions WHERE AssignmentId IN (
+         SELECT AssignmentId FROM ClassAssignments WHERE TeacherId = @userId
+       )`,
+      { userId: targetUserId }
+    );
+    await query('DELETE FROM ClassAssignments WHERE TeacherId = @userId', { userId: targetUserId });
+  } else {
+    await query('DELETE FROM ClassAssignmentSubmissions WHERE StudentId = @userId', { userId: targetUserId });
+  }
+
+  await query(
+    `UPDATE Conversations SET CreatedBy = (
+       SELECT MIN(cm.UserId) FROM ConversationMembers cm
+       WHERE cm.ConversationId = Conversations.ConversationId
+     )
+     WHERE CreatedBy = @userId
+       AND EXISTS (
+         SELECT 1 FROM ConversationMembers cm
+         WHERE cm.ConversationId = Conversations.ConversationId
+       )`,
+    { userId: targetUserId }
+  );
+  await query(
+    `DELETE FROM Conversations WHERE CreatedBy = @userId
+       AND NOT EXISTS (
+         SELECT 1 FROM ConversationMembers cm
+         WHERE cm.ConversationId = Conversations.ConversationId
+       )`,
+    { userId: targetUserId }
+  );
   await query('UPDATE Settings SET UpdatedBy = NULL WHERE UpdatedBy = @userId', { userId: targetUserId });
 
   // Clear any remaining owner links before user row delete

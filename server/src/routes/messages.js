@@ -1,29 +1,18 @@
 import { Router } from 'express';
 import { query } from '../db.js';
-import { studentCanAccessProject } from '../utils/projectAccess.js';
+import { sendError } from '../utils/httpError.js';
+import { getProjectParticipantIds, userCanAccessProject } from '../utils/projectAccess.js';
 import { authMiddleware, attachUserDetails } from '../middleware/auth.js';
 import { notifyMessageReceived } from '../services/notify.js';
 import { analyzeAttachment, analyzeTextContent } from '../services/documentAI.js';
 import { runProjectAIAnalysis } from '../services/projectAIService.js';
+import { validateDataUrlAttachment } from '../utils/attachments.js';
 
 const router = Router({ mergeParams: true });
 router.use(authMiddleware, attachUserDetails);
 
-const MAX_ATTACHMENT = 4_000_000;
-
 async function canAccessProject(user, projectId) {
-  if (user.role === 'admin') return false;
-  const project = await query(
-    'SELECT AssignedByTeacherId, OwnerStudentId FROM Projects WHERE ProjectId = @projectId',
-    { projectId }
-  );
-  if (!project.recordset.length) return false;
-  const p = project.recordset[0];
-  if (user.role === 'teacher' && p.AssignedByTeacherId === user.userId) return true;
-  if (user.role === 'student') {
-    return await studentCanAccessProject(user.userId, projectId);
-  }
-  return false;
+  return userCanAccessProject(user, projectId);
 }
 
 router.get('/', async (req, res) => {
@@ -72,7 +61,7 @@ router.get('/', async (req, res) => {
       })),
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, err);
   }
 });
 
@@ -92,14 +81,23 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'Message text or attachment required' });
     }
 
+    let attachment = null;
     if (hasAttachment) {
       if (!['image', 'video', 'file'].includes(attachmentType)) {
         return res.status(400).json({ error: 'Invalid attachment type' });
       }
-      if (typeof attachmentData !== 'string' || attachmentData.length > MAX_ATTACHMENT) {
-        return res.status(400).json({ error: 'Attachment too large (max ~4MB)' });
+      attachment = validateDataUrlAttachment({ data: attachmentData, name: attachmentName });
+      const categoryMatches = attachmentType === 'image'
+        ? attachment.mime.startsWith('image/')
+        : attachmentType === 'video'
+          ? attachment.mime.startsWith('video/')
+          : !attachment.mime.startsWith('image/') && !attachment.mime.startsWith('video/');
+      if (!categoryMatches) {
+        return res.status(400).json({ error: 'Attachment category does not match the file type' });
       }
     }
+    const safeAttachmentName = attachment?.name || null;
+    const safeAttachmentData = attachment?.data || null;
 
     const project = await query(
       `SELECT p.AssignedByTeacherId, p.OwnerStudentId FROM Projects p WHERE p.ProjectId = @projectId`,
@@ -108,22 +106,34 @@ router.post('/', async (req, res) => {
     if (!project.recordset.length) return res.status(404).json({ error: 'Project not found' });
     const p = project.recordset[0];
 
-    let toUserId = receiverId;
-    if (!toUserId) {
-      if (req.user.role === 'admin') {
-        toUserId = p.OwnerStudentId || p.AssignedByTeacherId;
-      } else if (req.user.userId === p.AssignedByTeacherId) {
-        toUserId = p.OwnerStudentId;
-      } else if (req.user.userId === p.OwnerStudentId) {
-        toUserId = p.AssignedByTeacherId;
-      } else {
-        toUserId = p.AssignedByTeacherId;
-      }
+    const scope = messageScope === 'project_group' ? 'project_group' : 'teacher_student';
+    const participantIds = await getProjectParticipantIds(projectId);
+    const studentIds = await getProjectParticipantIds(projectId, { includeTeacher: false });
+    const teacherId = Number(p.AssignedByTeacherId);
+    let toUserId = receiverId == null || receiverId === '' ? null : Number(receiverId);
+
+    if (toUserId != null && (!Number.isInteger(toUserId) || toUserId <= 0)) {
+      return res.status(400).json({ error: 'Invalid message recipient' });
     }
 
-    if (!toUserId) return res.status(400).json({ error: 'Could not determine message recipient' });
-
-    const scope = messageScope === 'project_group' ? 'project_group' : 'teacher_student';
+    if (scope === 'teacher_student') {
+      if (req.user.role === 'teacher') {
+        toUserId = toUserId || studentIds.find(id => id !== Number(req.user.userId));
+        if (!studentIds.includes(toUserId)) {
+          return res.status(403).json({ error: 'Recipient is not a student on this project' });
+        }
+      } else {
+        toUserId = toUserId || teacherId;
+        if (toUserId !== teacherId || !participantIds.includes(teacherId)) {
+          return res.status(403).json({ error: 'Messages must be sent to the assigned teacher' });
+        }
+      }
+    } else {
+      toUserId = toUserId || participantIds.find(id => id !== Number(req.user.userId));
+      if (!toUserId || toUserId === Number(req.user.userId) || !participantIds.includes(toUserId)) {
+        return res.status(403).json({ error: 'Recipient is not a participant in this project' });
+      }
+    }
 
     const result = await query(
       `INSERT INTO Messages (ProjectId, SenderId, ReceiverId, Content, AttachmentType, AttachmentName, AttachmentData, MessageScope)
@@ -136,8 +146,8 @@ router.post('/', async (req, res) => {
         receiverId: toUserId,
         content: text,
         attachmentType: hasAttachment ? attachmentType : null,
-        attachmentName: hasAttachment ? (attachmentName || 'attachment') : null,
-        attachmentData: hasAttachment ? attachmentData : null,
+        attachmentName: safeAttachmentName,
+        attachmentData: safeAttachmentData,
         scope,
       }
     );
@@ -161,8 +171,8 @@ router.post('/', async (req, res) => {
     if (senderIsStudent && recipientIsStaff) {
       if (hasAttachment && ['file', 'image', 'video'].includes(attachmentType)) {
         const analysis = await analyzeAttachment({
-          fileName: attachmentName,
-          attachmentData,
+          fileName: safeAttachmentName,
+          attachmentData: safeAttachmentData,
           attachmentType,
           projectTitle,
           projectAbstract,
@@ -176,8 +186,8 @@ router.post('/', async (req, res) => {
           {
             pid: projectId,
             mid: row.MessageId,
-            fileName: attachmentName,
-            fileType: attachmentName.split('.').pop()?.toLowerCase() || attachmentType,
+            fileName: safeAttachmentName,
+            fileType: safeAttachmentName.split('.').pop()?.toLowerCase() || attachmentType,
             summary: analysis.summary,
             mainTopic: analysis.mainTopic,
             keyPoints: JSON.stringify(analysis.keyPoints),
@@ -224,8 +234,8 @@ router.post('/', async (req, res) => {
       });
     } else if (hasAttachment && attachmentType === 'file') {
       const analysis = await analyzeAttachment({
-        fileName: attachmentName,
-        attachmentData,
+        fileName: safeAttachmentName,
+        attachmentData: safeAttachmentData,
         attachmentType: 'file',
         projectTitle,
         projectAbstract,
@@ -239,8 +249,8 @@ router.post('/', async (req, res) => {
         {
           pid: projectId,
           mid: row.MessageId,
-          fileName: attachmentName,
-          fileType: attachmentName.split('.').pop()?.toLowerCase() || 'file',
+          fileName: safeAttachmentName,
+          fileType: safeAttachmentName.split('.').pop()?.toLowerCase() || 'file',
           summary: analysis.summary,
           mainTopic: analysis.mainTopic,
           keyPoints: JSON.stringify(analysis.keyPoints),
@@ -256,30 +266,23 @@ router.post('/', async (req, res) => {
       documentAnalysis = ins.recordset[0];
     }
 
-    if (scope === 'teacher_student' || toUserId) {
+    if (scope === 'project_group') {
+      const members = participantIds.filter(id => id !== Number(req.user.userId));
+      for (const memberId of members) {
+        await notifyMessageReceived({
+          receiverId: memberId,
+          senderName: sender.recordset[0]?.SenderName || 'Someone',
+          projectId,
+          preview: text || `File: ${safeAttachmentName}`,
+        });
+      }
+    } else {
       await notifyMessageReceived({
         receiverId: toUserId,
         senderName: sender.recordset[0]?.SenderName || 'Someone',
         projectId,
-        preview: text || `File: ${attachmentName}`,
+        preview: text || `File: ${safeAttachmentName}`,
       });
-    } else if (scope === 'project_group') {
-      const members = await query(
-        `SELECT DISTINCT UserId FROM (
-           SELECT OwnerStudentId AS UserId FROM Projects WHERE ProjectId = @pid
-           UNION SELECT StudentId FROM ProjectMembers WHERE ProjectId = @pid
-           UNION SELECT AssignedByTeacherId FROM Projects WHERE ProjectId = @pid
-         ) x WHERE UserId IS NOT NULL AND UserId <> @senderId`,
-        { pid: projectId, senderId: req.user.userId }
-      );
-      for (const m of members.recordset) {
-        await notifyMessageReceived({
-          receiverId: m.UserId,
-          senderName: sender.recordset[0]?.SenderName || 'Someone',
-          projectId,
-          preview: text || `File: ${attachmentName}`,
-        });
-      }
     }
 
     res.status(201).json({
@@ -287,7 +290,9 @@ router.post('/', async (req, res) => {
       documentAnalysis,
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(err.status || 500).json({
+      error: err.status ? err.message : 'Could not send this message',
+    });
   }
 });
 

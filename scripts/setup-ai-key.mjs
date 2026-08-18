@@ -1,10 +1,4 @@
-/**
- * Add OpenAI or Gemini API key to .env
- * Usage:
- *   node scripts/setup-ai-key.mjs
- *   node scripts/setup-ai-key.mjs --openai sk-proj-...
- *   node scripts/setup-ai-key.mjs --gemini AIzaSy...
- */
+
 import fs from 'fs';
 import path from 'path';
 import readline from 'readline';

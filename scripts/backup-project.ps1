@@ -18,6 +18,8 @@ $count = 0
 $bytes = 0
 
 function Should-Skip($rel) {
+    $fileName = [System.IO.Path]::GetFileName($rel)
+    if ($fileName -eq '.env' -or $fileName -like '.env.*.local') { return $true }
     $parts = $rel -split '[\\/]'
     foreach ($part in $parts) {
         if ($excludeNames -contains $part) { return $true }

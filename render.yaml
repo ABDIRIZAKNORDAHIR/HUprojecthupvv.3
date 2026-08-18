@@ -9,16 +9,18 @@ services:
     name: hormuud-projecthub
     runtime: node
     plan: free
-    buildCommand: npm install && npm run build && cd server && npm install
-    startCommand: node server/src/setupDatabasePg.js && node server/src/seed.js && node server/src/index.js
+    buildCommand: npm ci --include=dev && npm run build && npm ci --prefix server --omit=dev
+    startCommand: node server/src/index.js
     healthCheckPath: /api/health
     envVars:
       - key: NODE_ENV
         value: production
       - key: SERVE_STATIC
         value: "true"
-      - key: PUBLIC_DEPLOY
+      - key: REQUIRE_PRODUCTION_CONFIG
         value: "true"
+      - key: NODE_VERSION
+        value: "22"
       - key: DB_DRIVER
         value: postgres
       - key: PORT
@@ -31,3 +33,23 @@ services:
         value: groq
       - key: JWT_SECRET
         generateValue: true
+      - key: ADMIN_EMAIL
+        sync: false
+      - key: ADMIN_DEFAULT_PASSWORD
+        sync: false
+      - key: SMTP_HOST
+        value: smtp.gmail.com
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: SMTP_FROM
+        sync: false
+      - key: VAPID_PUBLIC_KEY
+        sync: false
+      - key: VAPID_PRIVATE_KEY
+        sync: false
+      - key: VAPID_SUBJECT
+        sync: false

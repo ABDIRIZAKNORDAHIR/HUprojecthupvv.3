@@ -57,13 +57,13 @@ async function main() {
 
   let content = readEnv();
   content = setEnvVar(content, 'GROQ_API_KEY', key);
-  content = setEnvVar(content, 'GROQ_MODEL', 'llama-3.3-70b-versatile');
+  content = setEnvVar(content, 'GROQ_MODEL', 'openai/gpt-oss-120b');
   content = setEnvVar(content, 'GROQ_BASE_URL', 'https://api.groq.com/openai/v1');
   content = setEnvVar(content, 'AI_PROVIDER', 'groq');
   content = setEnvVar(content, 'AI_FALLBACK', 'false');
 
   if (!content.includes('GROQ_API_KEY')) {
-    content += `\n# FREE AI — Groq (no credit card)\nGROQ_API_KEY=${key}\nGROQ_MODEL=llama-3.3-70b-versatile\nGROQ_BASE_URL=https://api.groq.com/openai/v1\nAI_PROVIDER=groq\nAI_FALLBACK=false\n`;
+    content += `\n# FREE AI — Groq (no credit card)\nGROQ_API_KEY=${key}\nGROQ_MODEL=openai/gpt-oss-120b\nGROQ_BASE_URL=https://api.groq.com/openai/v1\nAI_PROVIDER=groq\nAI_FALLBACK=false\n`;
   }
 
   writeEnv(content);

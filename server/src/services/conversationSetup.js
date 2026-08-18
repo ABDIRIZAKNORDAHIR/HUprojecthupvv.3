@@ -1,5 +1,14 @@
 import { query } from '../db.js';
 
+/** Add a member if missing (T-SQL form; MySQL/Postgres translators rewrite it). */
+export async function ensureConversationMember(conversationId, userId) {
+  await query(
+    `IF NOT EXISTS (SELECT 1 FROM ConversationMembers WHERE ConversationId = @cid AND UserId = @uid)
+     INSERT INTO ConversationMembers (ConversationId, UserId) VALUES (@cid, @uid)`,
+    { cid: conversationId, uid: userId }
+  );
+}
+
 /** Ensure private teacher–student conversation exists for a project */
 export async function ensureTeacherStudentConversation(projectId) {
   const existing = await query(
@@ -74,11 +83,7 @@ export async function ensureProjectGroupConversation(projectId) {
     { pid: projectId }
   );
   for (const row of members.recordset) {
-    await query(
-      `IF NOT EXISTS (SELECT 1 FROM ConversationMembers WHERE ConversationId = @cid AND UserId = @uid)
-       INSERT INTO ConversationMembers (ConversationId, UserId) VALUES (@cid, @uid)`,
-      { cid: conversationId, uid: row.UserId }
-    );
+    await ensureConversationMember(conversationId, row.UserId);
   }
   return conversationId;
 }

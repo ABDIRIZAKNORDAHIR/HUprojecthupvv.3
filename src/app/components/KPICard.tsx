@@ -1,4 +1,4 @@
-import { motion } from "motion/react";
+import { motion, useReducedMotion } from "motion/react";
 import { TrendingUp, TrendingDown, Minus } from "lucide-react";
 import { AnimatedCounter } from "./AnimatedCounter";
 
@@ -14,22 +14,23 @@ interface KPICardProps {
 }
 
 export function KPICard({ title, value, change, icon: Icon, iconColor, iconBg, suffix = "", index = 0 }: KPICardProps) {
+  const reducedMotion = useReducedMotion();
   const isPositive = change !== undefined && change > 0;
   const isNegative = change !== undefined && change < 0;
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
+      initial={reducedMotion ? undefined : { opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4, delay: index * 0.08 }}
-      whileHover={{ scale: 1.02, y: -4 }}
-      className="relative bg-white rounded-xl p-5 border border-border shadow-sm cursor-pointer overflow-hidden group"
+      transition={{ duration: 0.4, delay: reducedMotion ? 0 : index * 0.08 }}
+      whileHover={reducedMotion ? undefined : { scale: 1.015, y: -6 }}
+      className="app-kpi-card group"
     >
       <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"
-        style={{ background: 'linear-gradient(135deg, rgba(22,163,74,0.04), rgba(37,99,235,0.04))' }} />
+        style={{ background: 'linear-gradient(135deg, rgba(16,185,129,0.08), rgba(4,120,87,0.025))' }} />
       <div className="relative">
       <div className="flex items-start justify-between mb-4">
-        <motion.div whileHover={{ scale: 1.1, rotate: 5 }}
+        <motion.div whileHover={reducedMotion ? undefined : { scale: 1.1, rotate: 5 }}
           className="w-11 h-11 rounded-xl flex items-center justify-center" style={{ background: iconBg }}>
           <Icon size={20} style={{ color: iconColor }} />
         </motion.div>
@@ -43,10 +44,10 @@ export function KPICard({ title, value, change, icon: Icon, iconColor, iconBg, s
         )}
       </div>
       <div>
-        <div style={{ fontSize: 28, fontWeight: 800, color: "#111827", fontFamily: "var(--font-display)", lineHeight: 1.1 }}>
+        <div style={{ fontSize: 28, fontWeight: 900, color: "#0A221C", fontFamily: "var(--font-display)", lineHeight: 1.1 }}>
           {typeof value === "number" ? <AnimatedCounter value={value} suffix={suffix} /> : value}
         </div>
-        <p style={{ fontSize: 13, color: "#64748B", fontWeight: 500, marginTop: 4 }}>{title}</p>
+        <p style={{ fontSize: 13, color: "#5D7B72", fontWeight: 650, marginTop: 4 }}>{title}</p>
       </div>
       </div>
     </motion.div>

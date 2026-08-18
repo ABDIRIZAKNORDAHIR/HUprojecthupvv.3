@@ -1,5 +1,4 @@
--- ProjectHub SQL Server Database Schema
--- Run in SQL Server Management Studio or: sqlcmd -S localhost -i schema.sql
+
 
 IF NOT EXISTS (SELECT name FROM sys.databases WHERE name = N'ProjectHub')
 BEGIN

@@ -44,6 +44,46 @@ function mapStatus(status: unknown): SubmissionStatus {
   return 'pending';
 }
 
+/** Stages that still need a decision from the teacher. */
+export function awaitsTeacherReview(submission: { stage?: string }) {
+  return (
+    submission.stage === 'pending_teacher' ||
+    submission.stage === 'submitted' ||
+    submission.stage === 'under_review'
+  );
+}
+
+/** Oldest arrival first, so the queue opens on the project that has waited longest. */
+export function byArrival(a: { arrived_at?: string }, b: { arrived_at?: string }) {
+  return new Date(a.arrived_at || 0).getTime() - new Date(b.arrived_at || 0).getTime();
+}
+
+export function projectStatusLabel(stage?: string) {
+  switch (String(stage || '')) {
+    case 'pending_teacher': return 'Awaiting teacher';
+    case 'assigned': return 'In progress';
+    case 'submitted': return 'Submitted';
+    case 'under_review': return 'Under review';
+    case 'changes_requested': return 'Changes requested';
+    case 'approved': return 'Approved';
+    case 'rejected': return 'Rejected';
+    default: return stage ? stage.replace(/_/g, ' ') : 'Pending';
+  }
+}
+
+export function stageLabel(stage?: string) {
+  switch (stage) {
+    case 'pending_teacher': return 'awaiting your acceptance';
+    case 'assigned': return 'accepted — in progress';
+    case 'submitted': return 'submitted';
+    case 'under_review': return 'under review';
+    case 'changes_requested': return 'changes requested';
+    case 'approved': return 'approved';
+    case 'rejected': return 'rejected';
+    default: return stage?.replace(/_/g, ' ') || 'pending';
+  }
+}
+
 function decisionLabel(decision: unknown): string {
   const s = String(decision || '').toLowerCase();
   if (s === 'approve') return 'APPROVE';
@@ -66,23 +106,35 @@ export function mapApiRowToSubmission(row: ApiRow): Submission {
   const featureSuggestions = parseJsonList(meta?.featureSuggestions || row.AiSuggestions);
   const rejectionReasons = parseReasons(meta?.rejectionReasons || row.RejectionReasons);
 
+  // Proposals have no submission yet, so fall back to when they reached the teacher.
+  const arrivalRaw = row.SubmissionTime || row.SubmittedAt || row.AssignedAt;
+  const arrivedAt = arrivalRaw ? new Date(String(arrivalRaw)).toISOString() : '';
+
   const aiSuggestion = hasRealAI && recommendedDecision
     ? `${decisionLabel(recommendedDecision)} — ${decisionReasoning || whatAbout.slice(0, 180)}`
     : String(row.AISuggestion || 'Review submission');
 
   return {
     id: String(row.ProjectId),
+    student_id: row.OwnerStudentId != null ? Number(row.OwnerStudentId) : null,
     student_name: name,
     student_avatar: initials(name),
+    student_photo: row.StudentProfileImageUrl ? String(row.StudentProfileImageUrl) : null,
+    university_id: String(row.StudentUniversityId || ''),
+    department_name: String(row.Department || ''),
+    class_name: String(row.ClassName || ''),
+    study_mode: String(row.StudyMode || ''),
     department: String(row.StudentUniversityId || ''),
     project_title: String(row.Title || ''),
     abstract: String(row.Abstract || ''),
-    submission_date: row.SubmissionTime || row.SubmittedAt
-      ? new Date(String(row.SubmissionTime || row.SubmittedAt)).toLocaleDateString('en-US', {
+    submission_date: arrivedAt
+      ? new Date(arrivedAt).toLocaleDateString('en-US', {
           month: 'short', day: 'numeric', year: 'numeric',
         })
       : '—',
+    arrived_at: arrivedAt,
     status: mapStatus(row.Status),
+    stage: String(row.Status || ''),
     athena: {
       uniqueness_score: hasRealAI ? (aiQuality || Number(row.UniquenessScore) || 0) : (Number(row.UniquenessScore) || 0),
       ai_confidence: aiConfidence,

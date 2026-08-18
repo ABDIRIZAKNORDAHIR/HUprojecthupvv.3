@@ -1,9 +1,11 @@
 import { useEffect, useState, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Search, FolderKanban, Users, X, Loader2 } from "lucide-react";
+import { Search, FolderKanban, X, Loader2 } from "lucide-react";
 import { useNavigate } from "react-router";
 import { api } from "../api/client";
 import { formatUniversityId } from "../utils/universityId";
+import { useAuth } from "../context/AuthContext";
+import { UserAvatar } from "./UserAvatar";
 
 interface SearchModalProps {
   open: boolean;
@@ -12,6 +14,7 @@ interface SearchModalProps {
 
 export function SearchModal({ open, onClose }: SearchModalProps) {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [query, setQuery] = useState("");
   const [projects, setProjects] = useState<Array<Record<string, unknown>>>([]);
   const [people, setPeople] = useState<Array<Record<string, unknown>>>([]);
@@ -57,6 +60,23 @@ export function SearchModal({ open, onClose }: SearchModalProps) {
     navigate(`/projects/${id}`);
   };
 
+  const goPerson = (person: Record<string, unknown>) => {
+    const id = Number(person.UserId);
+    const role = String(person.Role || '');
+    onClose();
+    if (role === 'student' && user?.Role === 'teacher') {
+      navigate(`/students/${id}`);
+      return;
+    }
+    if (role === 'teacher' && user?.Role === 'student') {
+      navigate('/my-teacher');
+      return;
+    }
+    if (user?.Role === 'admin') {
+      navigate('/admin/users');
+    }
+  };
+
   return (
     <AnimatePresence>
       {open && (
@@ -100,15 +120,22 @@ export function SearchModal({ open, onClose }: SearchModalProps) {
                 <div>
                   <p className="px-3 py-1 text-xs font-bold text-gray-400 uppercase">People ({people.length})</p>
                   {people.map(p => (
-                    <div key={String(p.UserId)} className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-gray-50">
-                      <Users size={16} className="text-blue-600 flex-shrink-0" />
+                    <button key={String(p.UserId)} type="button" onClick={() => goPerson(p)}
+                      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-gray-50 text-left">
+                      <UserAvatar
+                        firstName={String(p.FirstName || '')}
+                        lastName={String(p.LastName || '')}
+                        profileImageUrl={p.ProfileImageUrl ? String(p.ProfileImageUrl) : null}
+                        role={(p.Role as 'student' | 'teacher' | 'admin') || 'student'}
+                        size="sm"
+                      />
                       <div>
                         <p className="text-sm font-semibold">{String(p.FirstName)} {String(p.LastName)}</p>
                         <p className="text-xs text-gray-500">
                           {formatUniversityId(String(p.UniversityId))} · <span className="capitalize">{String(p.Role)}</span>
                         </p>
                       </div>
-                    </div>
+                    </button>
                   ))}
                 </div>
               )}

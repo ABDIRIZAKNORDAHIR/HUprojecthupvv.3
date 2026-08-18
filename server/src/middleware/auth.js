@@ -1,22 +1,23 @@
 import jwt from 'jsonwebtoken';
-
-const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-in-production';
+import { randomUUID } from 'crypto';
+import { getJwtSecret } from '../config/security.js';
+import { sendError } from '../utils/httpError.js';
 
 export function signToken(user) {
   return jwt.sign(
     { userId: user.UserId, role: user.Role, universityId: user.UniversityId },
-    JWT_SECRET,
+    getJwtSecret(),
     { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
   );
 }
 
 /** Short-lived proof that email OTP was verified (register / admin login). */
 export function signOtpGateToken(payload, expiresIn = '15m') {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn });
+  return jwt.sign(payload, getJwtSecret(), { expiresIn, jwtid: randomUUID() });
 }
 
 export function verifyOtpGateToken(token, expectedPurpose) {
-  const data = jwt.verify(token, JWT_SECRET);
+  const data = jwt.verify(token, getJwtSecret());
   if (data.purpose !== expectedPurpose) {
     const err = new Error('Invalid verification token');
     err.status = 401;
@@ -31,7 +32,7 @@ export function authMiddleware(req, res, next) {
     return res.status(401).json({ error: 'Authentication required' });
   }
   try {
-    req.user = jwt.verify(header.slice(7), JWT_SECRET);
+    req.user = jwt.verify(header.slice(7), getJwtSecret());
     next();
   } catch {
     return res.status(401).json({ error: 'Invalid or expired token' });
@@ -58,6 +59,6 @@ export async function attachUserDetails(req, res, next) {
     req.userDetails = result.recordset[0];
     next();
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, err);
   }
 }

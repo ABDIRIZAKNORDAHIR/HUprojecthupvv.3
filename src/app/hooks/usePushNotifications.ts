@@ -10,26 +10,35 @@ function urlBase64ToUint8Array(base64String: string) {
   return out;
 }
 
-export function usePushNotifications(enabled: boolean) {
+export function usePushNotifications() {
   const [supported, setSupported] = useState(false);
   const [subscribed, setSubscribed] = useState(false);
+  const [permission, setPermission] = useState<NotificationPermission>('default');
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    setSupported(
+    const isSupported =
       typeof window !== 'undefined' &&
         'serviceWorker' in navigator &&
         'PushManager' in window &&
-        'Notification' in window,
-    );
+        'Notification' in window;
+    setSupported(isSupported);
+    if (!isSupported) return;
+
+    setPermission(Notification.permission);
+    navigator.serviceWorker.ready
+      .then(registration => registration.pushManager.getSubscription())
+      .then(subscription => setSubscribed(Boolean(subscription)))
+      .catch(() => {});
   }, []);
 
   const subscribe = useCallback(async () => {
     setError(null);
     try {
       if (!supported) throw new Error('Push not supported in this browser');
-      const permission = await Notification.requestPermission();
-      if (permission !== 'granted') throw new Error('Notification permission denied');
+      const nextPermission = await Notification.requestPermission();
+      setPermission(nextPermission);
+      if (nextPermission !== 'granted') throw new Error('Notification permission was not granted');
 
       const { publicKey } = await api.getPushVapidKey();
       if (!publicKey) throw new Error('Push key unavailable');
@@ -52,17 +61,5 @@ export function usePushNotifications(enabled: boolean) {
     }
   }, [supported]);
 
-  useEffect(() => {
-    if (!enabled || !supported) return;
-    // Soft auto-prompt once per session after login
-    const key = 'projecthub_push_asked';
-    if (sessionStorage.getItem(key)) return;
-    sessionStorage.setItem(key, '1');
-    const t = window.setTimeout(() => {
-      subscribe().catch(() => {});
-    }, 4000);
-    return () => window.clearTimeout(t);
-  }, [enabled, supported, subscribe]);
-
-  return { supported, subscribed, error, subscribe };
+  return { supported, subscribed, permission, error, subscribe };
 }

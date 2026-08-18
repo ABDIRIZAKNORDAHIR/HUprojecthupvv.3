@@ -1,20 +1,24 @@
 @echo off
 REM ============================================================
-REM  SHARE PROJECTHUB ON THE INTERNET — FREE (Cloudflare Tunnel)
-REM  Anyone with the link can use your app while this PC is on.
-REM  Uses your local SQL Server — no hosting payment needed.
+REM  Hormuud ProjectHub — SHARE ON INTERNET (Cloud)
+REM  Starts API + UI, creates a free Cloudflare public link,
+REM  and opens it automatically in your browser.
+REM  Keep this window open while others use the app.
 REM ============================================================
 setlocal EnableExtensions
-call "%~dp0scripts\env-path.bat"
 cd /d "%~dp0"
+call scripts\env-path.bat
 
-title ProjectHub - Share on Internet
+title ProjectHub - Cloud Link
 color 0B
+cls
 
 echo.
 echo  ============================================================
-echo   PROJECTHUB — SHARE ON THE INTERNET (FREE)
-echo   Your computer must stay on while others use the app.
+echo   Hormuud ProjectHub — Share on Internet
+echo  ============================================================
+echo   Your PC must stay on while others use the public link.
+echo   The app will open automatically when the link is ready.
 echo  ============================================================
 echo.
 
@@ -27,14 +31,17 @@ if errorlevel 1 (
 
 where cloudflared >nul 2>&1
 if errorlevel 1 (
-  echo  cloudflared not found. Installing via winget...
-  winget install --id Cloudflare.cloudflared --accept-package-agreements --accept-source-agreements
-  echo.
-  echo  If install finished, close and re-open this window, then run again.
-  echo  Or download: https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/
-  echo.
+  if exist "C:\Program Files (x86)\cloudflared\cloudflared.exe" (
+    set "PATH=C:\Program Files (x86)\cloudflared;%PATH%"
+  ) else if exist "C:\Program Files\cloudflared\cloudflared.exe" (
+    set "PATH=C:\Program Files\cloudflared;%PATH%"
+  ) else (
+    echo  cloudflared not found. Installing via winget...
+    winget install --id Cloudflare.cloudflared --accept-package-agreements --accept-source-agreements
+    set "PATH=C:\Program Files (x86)\cloudflared;C:\Program Files\cloudflared;%PATH%"
+    echo.
+  )
 )
 
-node "%~dp0scripts\stop-services.mjs" 8080
-node "%~dp0scripts\share-internet.mjs"
+node scripts\share-dev-tunnel.mjs
 pause

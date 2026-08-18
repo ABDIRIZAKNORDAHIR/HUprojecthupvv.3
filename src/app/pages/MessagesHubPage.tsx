@@ -9,6 +9,8 @@ import { UserAvatar } from '../components/UserAvatar';
 import { PageHero } from '../components/PageHero';
 import { APP_IMAGES } from '../config/appImages';
 import { useRealtimeSocket } from '../hooks/useRealtimeSocket';
+import { MAX_ATTACHMENT_BYTES, MAX_ATTACHMENT_LABEL } from '../components/ChatMessage';
+import { estimateDataUrlBytes } from '../utils/compressImage';
 
 type Conv = Record<string, unknown>;
 type Msg = Record<string, unknown>;
@@ -16,6 +18,7 @@ type Msg = Record<string, unknown>;
 export function MessagesHubPage() {
   const { user } = useAuth();
   const location = useLocation();
+  const [inboxTab, setInboxTab] = useState<'all' | 'student_direct' | 'teacher_student' | 'project_group'>('all');
   const [conversations, setConversations] = useState<Conv[]>([]);
   const [activeId, setActiveId] = useState<number | null>(null);
   const [messages, setMessages] = useState<Msg[]>([]);
@@ -27,6 +30,7 @@ export function MessagesHubPage() {
   const [sending, setSending] = useState(false);
   const [pendingFile, setPendingFile] = useState<{ name: string; data: string; type: 'image' | 'video' | 'file' } | null>(null);
   const [typingUser, setTypingUser] = useState<string | null>(null);
+  const [attachmentError, setAttachmentError] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const activeIdRef = useRef<number | null>(null);
@@ -161,11 +165,26 @@ export function MessagesHubPage() {
 
   const pickFile = (file: File | undefined) => {
     if (!file) return;
+    setAttachmentError('');
+    if (file.size > MAX_ATTACHMENT_BYTES) {
+      setPendingFile(null);
+      setAttachmentError(`Attachment is too large. Choose a file under ${MAX_ATTACHMENT_LABEL}.`);
+      return;
+    }
     let type: 'image' | 'video' | 'file' = 'file';
     if (file.type.startsWith('image/')) type = 'image';
     else if (file.type.startsWith('video/')) type = 'video';
     const reader = new FileReader();
-    reader.onload = () => setPendingFile({ name: file.name, data: String(reader.result), type });
+    reader.onload = () => {
+      const data = String(reader.result);
+      if (estimateDataUrlBytes(data) > MAX_ATTACHMENT_BYTES) {
+        setPendingFile(null);
+        setAttachmentError(`Attachment is too large. Choose a file under ${MAX_ATTACHMENT_LABEL}.`);
+        return;
+      }
+      setPendingFile({ name: file.name, data, type });
+    };
+    reader.onerror = () => setAttachmentError('Could not read that attachment. Please try another file.');
     reader.readAsDataURL(file);
   };
 
@@ -177,62 +196,115 @@ export function MessagesHubPage() {
   const activeConv = conversations.find(c => c.ConversationId === activeId);
   const convLabel = (c: Conv) => {
     const t = String(c.ConversationType);
-    if (t === 'teacher_student') return `Teacher chat · ${c.ProjectTitle || 'Project'}`;
-    if (t === 'project_group') return `Group · ${c.Title || c.ProjectTitle || 'Team'}`;
-    return String(c.Title || 'Direct message');
+    if (t === 'teacher_student') return `Teacher · ${c.ProjectTitle || 'Academic chat'}`;
+    if (t === 'project_group') return `Team · ${c.Title || c.ProjectTitle || 'Project group'}`;
+    if (t === 'student_direct') return `Classmate · ${c.Title || 'Direct message'}`;
+    return String(c.Title || 'Conversation');
   };
+
+  const convHint = (c: Conv) => {
+    const t = String(c.ConversationType);
+    if (t === 'teacher_student') return 'Official academic channel';
+    if (t === 'project_group') return 'Project team discussion';
+    if (t === 'student_direct') return 'Peer-to-peer message';
+    return 'Direct conversation';
+  };
+
+  const filteredConversations = conversations.filter((c) => {
+    if (inboxTab === 'all') return true;
+    return String(c.ConversationType) === inboxTab;
+  });
+
+  const inboxTabs: Array<{ id: typeof inboxTab; label: string }> = [
+    { id: 'all', label: 'All' },
+    { id: 'student_direct', label: 'Classmates' },
+    { id: 'teacher_student', label: 'Teachers' },
+    { id: 'project_group', label: 'Teams' },
+  ];
 
   return (
     <div className="p-4 sm:p-6 max-w-screen-2xl mx-auto pb-mobile-nav space-y-4">
       <PageHero
+        dense
+        icon={MessageSquare}
+        eyebrow="Campus communication"
         title="Messages"
-        subtitle={undefined}
+        subtitle="Professional academic conversations with teachers, teammates, and classmates."
         image={APP_IMAGES.collaboration}
-        gradient="linear-gradient(135deg, #2563EB 0%, #168055 100%)"
       />
+
+      <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+        Keep messages clear and respectful. Use teacher chats for academic questions, team chats for project work, and classmate chats for coordination.
+      </div>
 
       <div className="flex items-center gap-2 text-xs font-semibold" style={{ color: connected ? '#16A34A' : '#94a3b8' }}>
         {connected ? <Wifi size={14} /> : <WifiOff size={14} />}
-        {connected ? 'Live' : 'Connecting…'}
+        {connected ? 'Live connection' : 'Connecting…'}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 min-h-[520px]">
         <div className="bg-white rounded-xl border shadow-sm flex flex-col overflow-hidden">
-          <div className="p-4 border-b">
+          <div className="p-4 border-b space-y-2">
+            <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Start a conversation</p>
             <div className="relative">
               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
               <input value={searchQ} onChange={e => setSearchQ(e.target.value)}
-                placeholder="Search by name, email, or HU ID..."
+                placeholder="Search by name, email, or HU ID…"
                 className="w-full pl-9 pr-3 py-2 border rounded-lg text-sm" />
             </div>
             {searchResults.length > 0 && (
               <div className="mt-2 border rounded-lg max-h-40 overflow-y-auto">
                 {searchResults.filter(u => u.UserId !== user?.UserId).map(u => (
                   <button key={u.UserId} type="button" onClick={() => startDirectChat(u)}
+                    aria-label={`Start direct chat with ${u.FirstName} ${u.LastName}`}
                     className="w-full flex items-center gap-2 p-2 hover:bg-gray-50 text-left text-sm border-b last:border-0">
-                    <UserAvatar firstName={u.FirstName} lastName={u.LastName} role={u.Role} size="sm" />
+                    <UserAvatar firstName={u.FirstName} lastName={u.LastName} role={u.Role} size="sm" profileImageUrl={u.ProfileImageUrl} />
                     <div className="min-w-0 flex-1">
                       <span className="block font-medium">{u.FirstName} {u.LastName}</span>
                       <span className="block text-[10px] text-gray-400 truncate capitalize">{u.Role} · {u.Email || u.UniversityId}</span>
                     </div>
-                    <UserPlus size={12} className="ml-auto text-blue-600 shrink-0" title="Start direct chat" />
+                    <UserPlus size={12} className="ml-auto text-blue-600 shrink-0" />
                   </button>
                 ))}
               </div>
             )}
           </div>
+          <div className="px-3 pt-3 flex flex-wrap gap-1.5 border-b pb-3">
+            {inboxTabs.map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setInboxTab(tab.id)}
+                className={`px-2.5 py-1 rounded-full text-[11px] font-bold transition-colors ${
+                  inboxTab === tab.id
+                    ? 'bg-green-600 text-white'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
           <div className="flex-1 overflow-y-auto">
             {loading ? (
               <div className="p-6 text-center text-sm text-gray-400"><Loader2 className="animate-spin inline mr-2" size={14} />Loading…</div>
-            ) : conversations.length === 0 ? (
-              <div className="p-6 text-center text-sm text-gray-400"><Users size={20} className="mx-auto mb-2 opacity-40" />No conversations yet</div>
-            ) : conversations.map(c => (
+            ) : filteredConversations.length === 0 ? (
+              <div className="p-6 text-center text-sm text-gray-400">
+                <Users size={20} className="mx-auto mb-2 opacity-40" />
+                {conversations.length === 0
+                  ? 'No conversations yet. Search for a classmate or teacher above.'
+                  : 'No conversations in this category.'}
+              </div>
+            ) : filteredConversations.map(c => (
               <button key={String(c.ConversationId)} type="button"
                 onClick={() => setActiveId(Number(c.ConversationId))}
                 className={`w-full text-left px-4 py-3 border-b hover:bg-green-50 transition-colors ${activeId === c.ConversationId ? 'bg-green-50' : ''}`}>
                 <div className="flex items-center gap-2">
                   <MessageSquare size={14} className="text-green-600 shrink-0" />
-                  <span className="text-sm font-semibold truncate">{convLabel(c)}</span>
+                  <div className="min-w-0 flex-1">
+                    <span className="block text-sm font-semibold truncate">{convLabel(c)}</span>
+                    <span className="block text-[10px] text-slate-400 truncate">{convHint(c)}</span>
+                  </div>
                   {Number(c.UnreadCount) > 0 && (
                     <span className="ml-auto text-[10px] font-bold bg-green-600 text-white rounded-full px-1.5">{String(c.UnreadCount)}</span>
                   )}
@@ -244,12 +316,19 @@ export function MessagesHubPage() {
 
         <div className="lg:col-span-2 bg-white rounded-xl border shadow-sm flex flex-col overflow-hidden min-h-[420px]">
           {!activeId ? (
-            <div className="flex-1 grid place-items-center text-sm text-gray-400 p-8">Select a conversation</div>
+            <div className="flex-1 grid place-items-center text-sm text-gray-400 p-8 text-center">
+              Select a conversation, or search for a classmate / teacher to begin.
+            </div>
           ) : (
             <>
-              <div className="px-4 py-3 border-b font-semibold text-sm flex items-center gap-2">
-                <MessageSquare size={16} className="text-green-600" />
-                {activeConv ? convLabel(activeConv) : 'Chat'}
+              <div className="px-4 py-3 border-b">
+                <div className="font-semibold text-sm flex items-center gap-2">
+                  <MessageSquare size={16} className="text-green-600" />
+                  {activeConv ? convLabel(activeConv) : 'Chat'}
+                </div>
+                {activeConv && (
+                  <p className="text-[11px] text-slate-400 mt-1">{convHint(activeConv)} · Keep communication professional</p>
+                )}
               </div>
               <div className="flex-1 overflow-y-auto p-4 space-y-3">
                 {messages.map((m) => {
@@ -277,9 +356,16 @@ export function MessagesHubPage() {
                   <button type="button" className="ml-auto text-red-500" onClick={() => setPendingFile(null)}>Remove</button>
                 </div>
               )}
+              {attachmentError && (
+                <p className="px-4 py-2 border-t text-xs text-red-700 bg-red-50" role="alert">
+                  {attachmentError}
+                </p>
+              )}
               <div className="p-3 border-t flex items-center gap-2">
-                <input ref={fileRef} type="file" className="hidden" onChange={e => pickFile(e.target.files?.[0])} />
-                <button type="button" onClick={() => fileRef.current?.click()} className="p-2 rounded-lg border hover:bg-gray-50">
+                <input ref={fileRef} type="file" className="hidden"
+                  onChange={e => { pickFile(e.target.files?.[0]); e.target.value = ''; }} />
+                <button type="button" onClick={() => fileRef.current?.click()} className="p-2 rounded-lg border hover:bg-gray-50"
+                  aria-label={`Attach file, maximum ${MAX_ATTACHMENT_LABEL}`}>
                   <Paperclip size={16} />
                 </button>
                 <input
@@ -287,12 +373,12 @@ export function MessagesHubPage() {
                   onChange={e => { setText(e.target.value); emitTyping(true); }}
                   onBlur={() => emitTyping(false)}
                   onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }}
-                  placeholder="Type a message…"
+                  placeholder="Write a clear, professional message…"
                   className="flex-1 border rounded-xl px-3 py-2 text-sm"
                 />
                 <motion.button whileTap={{ scale: 0.96 }} type="button" disabled={sending} onClick={send}
                   className="px-4 py-2 rounded-xl text-white font-semibold text-sm disabled:opacity-50"
-                  style={{ background: '#16A34A' }}>
+                  style={{ background: '#16A34A' }} aria-label="Send message">
                   {sending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
                 </motion.button>
               </div>

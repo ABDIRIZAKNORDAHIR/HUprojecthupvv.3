@@ -1,7 +1,9 @@
 import { Router } from 'express';
 import { query } from '../db.js';
+import { sendError } from '../utils/httpError.js';
 import { authMiddleware, attachUserDetails, requireRole } from '../middleware/auth.js';
 import { closeExpiredClassAssignments } from '../services/classAssignmentDeadline.js';
+import { validateDataUrlAttachment } from '../utils/attachments.js';
 
 const router = Router();
 router.use(authMiddleware, attachUserDetails);
@@ -27,7 +29,7 @@ async function notify(userId, title, message, type, projectId = null) {
 
 async function listStudentsInClass(className, studyMode = null) {
   let q = `
-    SELECT UserId, UniversityId, Email, FirstName, LastName, ClassName, StudyMode, Department
+    SELECT UserId, UniversityId, Email, FirstName, LastName, ClassName, StudyMode, Department, ProfileImageUrl
     FROM Users
     WHERE Role = 'student' AND IsActive = 1 AND AccountStatus = 'approved'
       AND UPPER(TRIM(ClassName)) = @className`;
@@ -55,7 +57,7 @@ router.get('/classes', requireRole('teacher', 'admin'), async (_req, res) => {
     `);
     res.json({ classes: r.recordset });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, err);
   }
 });
 
@@ -139,7 +141,7 @@ router.post('/', requireRole('teacher'), async (req, res) => {
       message: `Assignment sent to ${students.length} student(s) in ${cls}`,
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, err);
   }
 });
 
@@ -150,6 +152,8 @@ router.get('/teacher', requireRole('teacher'), async (req, res) => {
     const r = await query(
       `SELECT a.*,
               (SELECT COUNT(*) FROM ClassAssignmentSubmissions s WHERE s.AssignmentId = a.AssignmentId) AS SubmissionCount,
+              (SELECT COUNT(*) FROM ClassAssignmentSubmissions s
+               WHERE s.AssignmentId = a.AssignmentId AND s.Score IS NOT NULL) AS GradedCount,
               (SELECT COUNT(*) FROM Users u
                WHERE u.Role = 'student' AND u.IsActive = 1 AND u.AccountStatus = 'approved'
                  AND UPPER(TRIM(u.ClassName)) = a.ClassName
@@ -159,13 +163,45 @@ router.get('/teacher', requireRole('teacher'), async (req, res) => {
        ORDER BY a.CreatedAt DESC`,
       { tid: req.user.userId }
     );
-    res.json({ assignments: r.recordset });
+    const assignments = r.recordset;
+    const ids = assignments.map((row) => Number(row.AssignmentId)).filter((id) => Number.isFinite(id) && id > 0);
+    const recentByAssignment = new Map();
+    if (ids.length) {
+      const params = Object.fromEntries(ids.map((id, index) => [`id${index}`, id]));
+      const placeholders = ids.map((_, index) => `@id${index}`).join(', ');
+      const recent = await query(
+        `SELECT s.AssignmentId, s.StudentId, u.FirstName, u.LastName, u.ProfileImageUrl, s.SubmittedAt
+         FROM ClassAssignmentSubmissions s
+         JOIN Users u ON u.UserId = s.StudentId
+         WHERE s.AssignmentId IN (${placeholders})
+         ORDER BY s.SubmittedAt DESC`,
+        params
+      );
+      for (const row of recent.recordset) {
+        const assignmentId = Number(row.AssignmentId);
+        const list = recentByAssignment.get(assignmentId) || [];
+        if (list.length >= 5) continue;
+        list.push({
+          StudentId: row.StudentId,
+          FirstName: row.FirstName,
+          LastName: row.LastName,
+          ProfileImageUrl: row.ProfileImageUrl || null,
+        });
+        recentByAssignment.set(assignmentId, list);
+      }
+    }
+    res.json({
+      assignments: assignments.map((row) => ({
+        ...row,
+        RecentSubmitters: recentByAssignment.get(Number(row.AssignmentId)) || [],
+      })),
+    });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, err);
   }
 });
 
-/** Teacher: submissions for one assignment */
+/** Teacher: submissions for one assignment (files loaded separately so the list stays fast). */
 router.get('/:assignmentId/submissions', requireRole('teacher'), async (req, res) => {
   try {
     const assignmentId = parseInt(req.params.assignmentId, 10);
@@ -174,18 +210,130 @@ router.get('/:assignmentId/submissions', requireRole('teacher'), async (req, res
       { id: assignmentId, tid: req.user.userId }
     );
     if (!a.recordset.length) return res.status(404).json({ error: 'Assignment not found' });
+    const assignment = a.recordset[0];
 
     const subs = await query(
-      `SELECT s.*, u.FirstName, u.LastName, u.UniversityId, u.Email, u.ClassName, u.StudyMode
+      `SELECT s.SubmissionId, s.AssignmentId, s.StudentId, s.Content, s.AttachmentName,
+              CASE WHEN s.AttachmentName IS NOT NULL AND LTRIM(RTRIM(s.AttachmentName)) <> '' THEN 1 ELSE 0 END AS HasAttachment,
+              s.Score, s.BonusPoints, s.TeacherFeedback, s.GradedAt, s.SubmittedAt,
+              u.FirstName, u.LastName, u.UniversityId, u.Email, u.ClassName, u.StudyMode, u.ProfileImageUrl
        FROM ClassAssignmentSubmissions s
        JOIN Users u ON u.UserId = s.StudentId
        WHERE s.AssignmentId = @id
        ORDER BY s.SubmittedAt DESC`,
       { id: assignmentId }
     );
-    res.json({ assignment: a.recordset[0], submissions: subs.recordset });
+
+    const roster = await listStudentsInClass(
+      normalizeClassName(assignment.ClassName),
+      assignment.StudyMode || null,
+    );
+    const submitted = new Set(subs.recordset.map((row) => Number(row.StudentId)));
+    const awaiting = roster
+      .filter((student) => !submitted.has(Number(student.UserId)))
+      .map((student) => ({
+        StudentId: student.UserId,
+        FirstName: student.FirstName,
+        LastName: student.LastName,
+        UniversityId: student.UniversityId,
+        Email: student.Email,
+        ClassName: student.ClassName,
+        StudyMode: student.StudyMode,
+        ProfileImageUrl: student.ProfileImageUrl || null,
+      }));
+
+    res.json({ assignment, submissions: subs.recordset, awaiting });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, err);
+  }
+});
+
+/** Teacher: fetch one student's attached file for review (opens in a new tab). */
+router.get('/submissions/:submissionId/file', requireRole('teacher'), async (req, res) => {
+  try {
+    const submissionId = parseInt(req.params.submissionId, 10);
+    const file = await query(
+      `SELECT s.AttachmentName, s.AttachmentData
+       FROM ClassAssignmentSubmissions s
+       JOIN ClassAssignments a ON a.AssignmentId = s.AssignmentId
+       WHERE s.SubmissionId = @submissionId AND a.TeacherId = @teacherId`,
+      { submissionId, teacherId: req.user.userId }
+    );
+    const row = file.recordset[0];
+    if (!row?.AttachmentData) return res.status(404).json({ error: 'No file attached to this submission' });
+    res.json({ name: row.AttachmentName || 'Student assignment.pdf', data: row.AttachmentData });
+  } catch (err) {
+    sendError(res, err);
+  }
+});
+
+/** Teacher: record or update a mark after reviewing one student's work. */
+router.patch('/submissions/:submissionId/grade', requireRole('teacher'), async (req, res) => {
+  try {
+    const submissionId = parseInt(req.params.submissionId, 10);
+    const score = Number(req.body.score);
+    const bonusPoints = req.body.bonusPoints == null || req.body.bonusPoints === ''
+      ? 0
+      : Number(req.body.bonusPoints);
+    const feedback = String(req.body.feedback || '').trim();
+
+    if (!Number.isInteger(submissionId) || submissionId < 1) {
+      return res.status(400).json({ error: 'Invalid submission' });
+    }
+    if (!Number.isFinite(score) || score < 0 || score > 100) {
+      return res.status(400).json({ error: 'Mark must be between 0 and 100' });
+    }
+    if (!Number.isFinite(bonusPoints) || bonusPoints < 0 || bonusPoints > 20) {
+      return res.status(400).json({ error: 'Bonus must be between 0 and 20 points' });
+    }
+    if (feedback.length > 4000) {
+      return res.status(400).json({ error: 'Feedback must be 4,000 characters or fewer' });
+    }
+
+    const owned = await query(
+      `SELECT s.SubmissionId, s.StudentId, a.Title
+       FROM ClassAssignmentSubmissions s
+       JOIN ClassAssignments a ON a.AssignmentId = s.AssignmentId
+       WHERE s.SubmissionId = @submissionId AND a.TeacherId = @teacherId`,
+      { submissionId, teacherId: req.user.userId }
+    );
+    if (!owned.recordset.length) {
+      return res.status(404).json({ error: 'Submission not found' });
+    }
+
+    await query(
+      `UPDATE ClassAssignmentSubmissions
+       SET Score = @score,
+           BonusPoints = @bonusPoints,
+           TeacherFeedback = @feedback,
+           GradedAt = CURRENT_TIMESTAMP,
+           GradedBy = @teacherId
+       WHERE SubmissionId = @submissionId`,
+      {
+        score,
+        bonusPoints,
+        feedback: feedback || null,
+        teacherId: req.user.userId,
+        submissionId,
+      }
+    );
+
+    const submission = owned.recordset[0];
+    const finalScore = Math.min(100, score + bonusPoints);
+    await notify(
+      submission.StudentId,
+      'Assignment marked',
+      `Your mark for "${submission.Title}" is ${finalScore}/100${bonusPoints ? ` (including ${bonusPoints} bonus points)` : ''}.`,
+      'class_assignment_graded',
+      null
+    );
+
+    res.json({
+      message: 'Mark saved and sent to the student',
+      grade: { score, bonusPoints, finalScore, feedback: feedback || null },
+    });
+  } catch (err) {
+    sendError(res, err);
   }
 });
 
@@ -210,7 +358,8 @@ router.get('/student', requireRole('student'), async (req, res) => {
       `SELECT a.*,
               t.FirstName + ' ' + t.LastName AS TeacherName,
               CASE WHEN s.SubmissionId IS NULL THEN 0 ELSE 1 END AS HasSubmitted,
-              s.SubmittedAt, s.Content AS MyContent,
+              s.SubmittedAt, s.Content AS MyContent, s.AttachmentName AS MyAttachmentName,
+              s.Score, s.BonusPoints, s.TeacherFeedback, s.GradedAt,
               CASE
                 WHEN a.IsClosed = 1 OR a.DeadlineAt <= SYSUTCDATETIME() THEN 1
                 ELSE 0
@@ -231,7 +380,7 @@ router.get('/student', requireRole('student'), async (req, res) => {
     );
     res.json({ assignments: r.recordset, className: cls, studyMode: profile.StudyMode });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, err);
   }
 });
 
@@ -241,7 +390,13 @@ router.post('/:assignmentId/submit', requireRole('student'), async (req, res) =>
     await closeExpiredClassAssignments();
     const assignmentId = parseInt(req.params.assignmentId, 10);
     const { content, attachmentName, attachmentData } = req.body;
-    if (!content?.trim()) return res.status(400).json({ error: 'Submission content is required' });
+    if (!content?.trim() && !attachmentData) {
+      return res.status(400).json({ error: 'Write an answer or attach a supported file' });
+    }
+    const attachment = validateDataUrlAttachment({
+      data: attachmentData,
+      name: attachmentName,
+    });
 
     const a = await query(`SELECT * FROM ClassAssignments WHERE AssignmentId = @id`, { id: assignmentId });
     if (!a.recordset.length) return res.status(404).json({ error: 'Assignment not found' });
@@ -277,7 +432,8 @@ router.post('/:assignmentId/submit', requireRole('student'), async (req, res) =>
     }
 
     const existing = await query(
-      `SELECT SubmissionId FROM ClassAssignmentSubmissions WHERE AssignmentId = @aid AND StudentId = @sid`,
+      `SELECT SubmissionId, AttachmentName, AttachmentData
+       FROM ClassAssignmentSubmissions WHERE AssignmentId = @aid AND StudentId = @sid`,
       { aid: assignmentId, sid: req.user.userId }
     );
 
@@ -287,9 +443,9 @@ router.post('/:assignmentId/submit', requireRole('student'), async (req, res) =>
          SET Content = @content, AttachmentName = @attachmentName, AttachmentData = @attachmentData, SubmittedAt = SYSUTCDATETIME()
          WHERE AssignmentId = @aid AND StudentId = @sid`,
         {
-          content: content.trim(),
-          attachmentName: attachmentName || null,
-          attachmentData: attachmentData || null,
+          content: String(content || '').trim(),
+          attachmentName: attachment?.name || existing.recordset[0].AttachmentName || null,
+          attachmentData: attachment?.data || existing.recordset[0].AttachmentData || null,
           aid: assignmentId,
           sid: req.user.userId,
         }
@@ -301,9 +457,9 @@ router.post('/:assignmentId/submit', requireRole('student'), async (req, res) =>
         {
           aid: assignmentId,
           sid: req.user.userId,
-          content: content.trim(),
-          attachmentName: attachmentName || null,
-          attachmentData: attachmentData || null,
+          content: String(content || '').trim(),
+          attachmentName: attachment?.name || null,
+          attachmentData: attachment?.data || null,
         }
       );
     }
@@ -318,7 +474,9 @@ router.post('/:assignmentId/submit', requireRole('student'), async (req, res) =>
 
     res.json({ message: 'Assignment submitted successfully' });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(err.status || 500).json({
+      error: err.status ? err.message : 'Could not submit this assignment',
+    });
   }
 });
 

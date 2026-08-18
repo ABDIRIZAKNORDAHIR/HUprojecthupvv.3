@@ -31,7 +31,7 @@ function localCoachAdvice({ title, abstract, question }) {
     provider: 'local-coach',
     model: 'athena-rules',
     answer: [
-      'Athena Coach (offline mode):',
+      'Project guidance (offline mode):',
       '',
       ...tips.map((t, i) => `${i + 1}. ${t}`),
       '',

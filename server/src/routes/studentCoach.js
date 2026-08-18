@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { query } from '../db.js';
+import { sendError } from '../utils/httpError.js';
 import { authMiddleware, attachUserDetails, requireRole } from '../middleware/auth.js';
 import { coachStudent, scoreTopicOriginality } from '../services/studentCoach.js';
 import { getAIProviderInfo, isRealAIConfigured } from '../services/aiEngine.js';
@@ -29,7 +30,7 @@ router.post('/advise', async (req, res) => {
     });
     res.json(result);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, err);
   }
 });
 
@@ -46,7 +47,7 @@ router.post('/originality', async (req, res) => {
     const score = scoreTopicOriginality(title, abstract, (others.recordset || []).slice(0, 200));
     res.json({ ...score, engine: 'athena-embeddings-v1' });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, err);
   }
 });
 

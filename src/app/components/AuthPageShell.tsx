@@ -45,10 +45,10 @@ export function AuthPortalLinks({ role }: AuthPortalLinksProps) {
       <p className="welcome-label text-center mb-2" style={{ color: HU_BRAND_GREEN }}>Other portals</p>
       <div className="flex flex-wrap justify-center gap-2">
         {!hideStudent && (
-          <Link to="/student" className="auth-portal-pill">Student</Link>
+          <Link to="/login/student" className="auth-portal-pill">Student</Link>
         )}
         {!hideTeacher && (
-          <Link to="/teacher" className="auth-portal-pill">Teacher</Link>
+          <Link to="/login/teacher" className="auth-portal-pill">Teacher</Link>
         )}
         <Link to="/" className="auth-portal-pill auth-portal-pill--muted">Home</Link>
       </div>

@@ -1,18 +1,19 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { motion } from 'motion/react';
-import { FolderKanban, Clock, Plus, ChevronRight, AlertCircle, GraduationCap, X, UserPlus, IdCard } from 'lucide-react';
+import { FolderKanban, Clock, Plus, ChevronRight, AlertCircle, GraduationCap, X, IdCard, FileText, Upload } from 'lucide-react';
 import { Link } from 'react-router';
 import { api, type Project } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { PageHero } from '../components/PageHero';
 import { APP_IMAGES } from '../config/appImages';
 import { UniversityIdLookup, type LookupPerson } from '../components/UniversityIdLookup';
+import { WaitingMark } from '../components/WaitingIcon';
 
-const statusStyle: Record<string, { bg: string; text: string }> = {
-  pending_teacher: { bg: '#FDF4FF', text: '#9333EA' },
+const statusStyle: Record<string, { bg: string; text: string; waiting?: boolean }> = {
+  pending_teacher: { bg: '#FFF7E6', text: '#B45309', waiting: true },
   assigned: { bg: '#EFF6FF', text: '#2563EB' },
-  submitted: { bg: '#FEFCE8', text: '#EAB308' },
-  under_review: { bg: '#F5F3FF', text: '#7C3AED' },
+  submitted: { bg: '#FFF7E6', text: '#B45309', waiting: true },
+  under_review: { bg: '#FFF7E6', text: '#B45309', waiting: true },
   approved: { bg: '#F0FDF4', text: '#16A34A' },
   rejected: { bg: '#FEF2F2', text: '#EF4444' },
   changes_requested: { bg: '#FFF7ED', text: '#EA580C' },
@@ -35,7 +36,9 @@ export function AssignedProjectsPage() {
   const [foundTeacher, setFoundTeacher] = useState<LookupPerson | null>(null);
   const [teacherPickMode, setTeacherPickMode] = useState<'id' | 'list'>('id');
   const [proposal, setProposal] = useState({ title: '', abstract: '', description: '' });
+  const [proposalPdf, setProposalPdf] = useState<{ name: string; data: string; size: number } | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const pdfRef = useRef<HTMLInputElement>(null);
 
   const load = useCallback(() => {
     if (!user?.UserId) return;
@@ -68,9 +71,11 @@ export function AssignedProjectsPage() {
         teacherId,
         ...(teacherPickMode === 'id' && teacherIdInput ? { teacherUniversityId: teacherIdInput } : {}),
         ...proposal,
+        ...(proposalPdf ? { attachmentName: proposalPdf.name, attachmentData: proposalPdf.data } : {}),
       });
       setShowPropose(false);
       setProposal({ title: '', abstract: '', description: '' });
+      setProposalPdf(null);
       setSelectedTeacher(null);
       setFoundTeacher(null);
       setTeacherIdInput('');
@@ -83,13 +88,35 @@ export function AssignedProjectsPage() {
     }
   };
 
+  const pickProposalPdf = (file?: File) => {
+    if (!file) return;
+    setError('');
+    if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
+      setError('Only PDF files can be attached to a project proposal.');
+      return;
+    }
+    if (file.size > 3 * 1024 * 1024) {
+      setError('The PDF must be 3 MB or smaller.');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => setProposalPdf({ name: file.name, data: String(reader.result), size: file.size });
+    reader.onerror = () => setError('Could not read that PDF.');
+    reader.readAsDataURL(file);
+    if (pdfRef.current) pdfRef.current.value = '';
+  };
+
   const isStudent = user?.Role === 'student';
 
   return (
     <div className="p-6 max-w-screen-2xl mx-auto space-y-6 pb-24">
       <PageHero
-        title={isStudent ? 'My Projects' : 'Assigned Projects'}
-        subtitle={isStudent ? 'Assign to teacher' : 'Assigned projects'}
+        icon={FolderKanban}
+        eyebrow="Project portfolio"
+        title={isStudent ? 'My projects' : 'Assigned projects'}
+        subtitle={isStudent
+          ? 'Track every project you own and send new topics to a supervisor.'
+          : 'Projects students have assigned to you for supervision.'}
         image={APP_IMAGES.projectPlanning}
         showImageCaption
       >
@@ -118,8 +145,8 @@ export function AssignedProjectsPage() {
           )}
         </div>
       ) : (
-        <div className="bg-white rounded-xl border overflow-hidden">
-          <table className="w-full">
+        <div className="bg-white rounded-xl border overflow-x-auto">
+          <table className="w-full min-w-[760px]">
             <thead>
               <tr className="bg-gray-50 border-b">
                 {['Project ID', 'Title', 'Teacher', 'Assigned', 'Status', ''].map(h => (
@@ -129,7 +156,7 @@ export function AssignedProjectsPage() {
             </thead>
             <tbody>
               {projects.map(p => {
-                const st = statusStyle[p.Status] || statusStyle.assigned;
+                const st = statusStyle[p.Status] || statusStyle.assigned || { bg: '#F1F5F9', text: '#475569' };
                 return (
                   <tr key={p.ProjectId} className="border-b hover:bg-gray-50">
                     <td className="px-4 py-3 font-mono text-sm font-bold text-green-700">{p.TeacherAssignedId}</td>
@@ -137,7 +164,9 @@ export function AssignedProjectsPage() {
                     <td className="px-4 py-3 text-sm text-gray-600">{p.TeacherName || '—'}</td>
                     <td className="px-4 py-3 text-sm text-gray-500"><Clock size={12} className="inline mr-1" />{formatDate(p.AssignedAt)}</td>
                     <td className="px-4 py-3">
-                      <span className="px-2 py-0.5 rounded-full text-xs font-semibold capitalize" style={{ background: st.bg, color: st.text }}>
+                      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold capitalize"
+                        style={{ background: st.bg, color: st.text }}>
+                        {st.waiting && <WaitingMark size={12} />}
                         {p.Status.replace(/_/g, ' ')}
                       </span>
                     </td>
@@ -164,24 +193,57 @@ export function AssignedProjectsPage() {
                 <h2 className="text-lg font-bold">Assign Project to Teacher</h2>
                 <p className="text-sm text-gray-500">Choose a teacher by category — they will approve or reject</p>
               </div>
-              <button onClick={() => setShowPropose(false)}><X size={20} /></button>
+              <button type="button" onClick={() => setShowPropose(false)} aria-label="Close project assignment dialog">
+                <X size={20} />
+              </button>
             </div>
             <form onSubmit={handlePropose} className="p-6 space-y-5">
               <div>
-                <label className="text-sm font-semibold">Project Title *</label>
-                <input value={proposal.title} onChange={e => setProposal(p => ({ ...p, title: e.target.value }))} required
+                <label htmlFor="proposal-title" className="text-sm font-semibold">Project Title *</label>
+                <input id="proposal-title" value={proposal.title} onChange={e => setProposal(p => ({ ...p, title: e.target.value }))} required
                   className="mt-1 w-full px-3 py-2 rounded-lg border text-sm" placeholder="e.g. AI-Powered Healthcare System" />
               </div>
               <div>
-                <label className="text-sm font-semibold">Abstract</label>
-                <textarea value={proposal.abstract} onChange={e => setProposal(p => ({ ...p, abstract: e.target.value }))}
+                <label htmlFor="proposal-abstract" className="text-sm font-semibold">Abstract</label>
+                <textarea id="proposal-abstract" value={proposal.abstract} onChange={e => setProposal(p => ({ ...p, abstract: e.target.value }))}
                   className="mt-1 w-full px-3 py-2 rounded-lg border text-sm" rows={2} />
               </div>
               <div>
-                <label className="text-sm font-semibold">Description</label>
-                <textarea value={proposal.description} onChange={e => setProposal(p => ({ ...p, description: e.target.value }))}
+                <label htmlFor="proposal-description" className="text-sm font-semibold">Description</label>
+                <textarea id="proposal-description" value={proposal.description} onChange={e => setProposal(p => ({ ...p, description: e.target.value }))}
                   className="mt-1 w-full px-3 py-2 rounded-lg border text-sm" rows={3}
                   placeholder="Describe your project goals and approach..." />
+              </div>
+
+              <div>
+                <label className="text-sm font-semibold">Project PDF <span className="font-normal text-gray-400">(optional)</span></label>
+                <input
+                  ref={pdfRef}
+                  type="file"
+                  accept=".pdf,application/pdf"
+                  className="hidden"
+                  onChange={e => pickProposalPdf(e.target.files?.[0])}
+                />
+                {proposalPdf ? (
+                  <div className="mt-2 flex items-center justify-between gap-3 rounded-xl border border-green-200 bg-green-50 px-3 py-3">
+                    <span className="flex min-w-0 items-center gap-2 text-sm font-semibold text-green-800">
+                      <FileText size={17} className="shrink-0" />
+                      <span className="truncate">{proposalPdf.name}</span>
+                      <em className="shrink-0 text-xs font-normal not-italic text-green-600">
+                        {(proposalPdf.size / 1024).toFixed(0)} KB
+                      </em>
+                    </span>
+                    <button type="button" onClick={() => setProposalPdf(null)} className="text-xs font-bold text-red-600">Remove</button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => pdfRef.current?.click()}
+                    className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-gray-200 bg-gray-50 px-4 py-5 text-sm font-semibold text-gray-600 transition hover:border-green-400 hover:bg-green-50"
+                  >
+                    <Upload size={17} /> Attach project PDF (maximum 3 MB)
+                  </button>
+                )}
               </div>
 
               <div>

@@ -12,12 +12,11 @@ export interface TeacherExportSummary {
 
 /** KPI bar chart — mirrors the Statistics sheet in Excel/PDF */
 export function buildTeacherSummaryChartData(
-  summary: Pick<TeacherExportSummary, 'pending' | 'unique' | 'collisions' | 'approved'>
+  summary: Pick<TeacherExportSummary, 'pending' | 'unique' | 'approved'>
 ) {
   return [
     { name: 'Pending', count: summary.pending, fill: '#EF4444' },
     { name: 'Unique (>80%)', count: summary.unique, fill: '#16A34A' },
-    { name: 'Collisions', count: summary.collisions, fill: '#EAB308' },
     { name: 'Approved', count: summary.approved, fill: '#2563EB' },
   ];
 }

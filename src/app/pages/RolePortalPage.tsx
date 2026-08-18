@@ -1,55 +1,30 @@
 import { useState } from 'react';
-import { motion } from 'motion/react';
-import { LogIn, UserPlus, BookOpen, Briefcase, Lock, Mail, ShieldCheck, KeyRound, ArrowLeft } from 'lucide-react';
+import { AnimatePresence, motion } from 'motion/react';
+import { ArrowLeft, KeyRound, Lock, LogIn, Mail, ShieldCheck, UserPlus } from 'lucide-react';
 import { Link, useNavigate } from 'react-router';
 import { useAuth } from '../context/AuthContext';
 import { ApiError, api } from '../api/client';
-import { BrandLogo } from '../components/BrandLogo';
-import { HU_BRAND_GREEN } from '../config/appImages';
-import { AuthLayout } from '../components/BrandBackground';
-import { AuthPortalLinks } from '../components/AuthPageShell';
-import '../styles/welcome.css';
+import { AuthShell } from '../components/AuthShell';
+import { DevOtpReveal } from '../components/DevOtpReveal';
+import { OtpBoxes } from '../components/OtpBoxes';
+import { OtpCountdown } from '../components/OtpCountdown';
+import { WaitingMark } from '../components/WaitingIcon';
 
 type PortalRole = 'student' | 'teacher' | 'admin';
 type AdminStep = 'email' | 'otp' | 'password';
 type ResetStep = 'email' | 'otp' | 'password' | 'done';
 
-const config: Record<PortalRole, {
-  title: string;
-  signInLabel: string;
-  icon: typeof BookOpen;
-  badge: string;
-  canRegister: boolean;
-}> = {
-  student: {
-    title: 'Student',
-    signInLabel: 'Sign in',
-    icon: BookOpen,
-    badge: 'Student',
-    canRegister: true,
-  },
-  teacher: {
-    title: 'Teacher',
-    signInLabel: 'Sign in',
-    icon: Briefcase,
-    badge: 'Teacher',
-    canRegister: true,
-  },
-  admin: {
-    title: 'Staff',
-    signInLabel: 'Sign in',
-    icon: Lock,
-    badge: 'Staff',
-    canRegister: false,
-  },
+const titles: Record<PortalRole, { title: string; subtitle: string }> = {
+  student: { title: 'Student sign in', subtitle: 'Enter your HU ID and university email to open your projects, proposals and marks.' },
+  teacher: { title: 'Teacher sign in', subtitle: 'Enter your HU ID and university email to open the review queue and release marks.' },
+  admin: { title: 'Staff sign in', subtitle: 'Administration accounts are verified by email code before the password.' },
 };
 
 export function RolePortalPage({ role }: { role: PortalRole }) {
   const { login } = useAuth();
   const navigate = useNavigate();
-  const cfg = config[role];
-  const Icon = cfg.icon;
   const isAdmin = role === 'admin';
+  const fieldId = (name: string) => `${role}-portal-${name}`;
 
   const [universityId, setUniversityId] = useState('');
   const [email, setEmail] = useState('');
@@ -65,9 +40,19 @@ export function RolePortalPage({ role }: { role: PortalRole }) {
   const [mode, setMode] = useState<'login' | 'reset'>('login');
   const [resetStep, setResetStep] = useState<ResetStep>('email');
   const [resetToken, setResetToken] = useState('');
+  const [verifiedEmail, setVerifiedEmail] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [info, setInfo] = useState('');
+  const [delivery, setDelivery] = useState<{ to: string; notice?: string | null; devCode?: string | null } | null>(null);
+  const [codeExpiresAt, setCodeExpiresAt] = useState(0);
+  const [codeExpired, setCodeExpired] = useState(false);
+
+  /** The emailed code dies with the server TTL, so the UI must stop accepting it too. */
+  const armCodeTimer = (minutes: number) => {
+    setCodeExpiresAt(Date.now() + Math.max(1, minutes) * 60_000);
+    setCodeExpired(false);
+  };
 
   const openReset = () => {
     setMode('reset');
@@ -96,7 +81,10 @@ export function RolePortalPage({ role }: { role: PortalRole }) {
     setError('');
     setLoading(true);
     try {
-      await api.requestAdminOtp(email.trim());
+      const res = await api.requestAdminOtp(email.trim().toLowerCase());
+      setDelivery({ to: res.deliveredTo, notice: res.notice, devCode: res.devCode });
+      if (res.devCode) setOtp(res.devCode);
+      armCodeTimer(res.expiresInMinutes);
       setAdminStep('otp');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to send code');
@@ -107,11 +95,12 @@ export function RolePortalPage({ role }: { role: PortalRole }) {
 
   const verifyAdminOtp = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (codeExpired) return setError('That code expired. Send a new one.');
     if (!/^\d{6}$/.test(otp.trim())) return setError('Enter the 6-digit code');
     setError('');
     setLoading(true);
     try {
-      const res = await api.verifyAdminOtp({ email: email.trim(), code: otp.trim() });
+      const res = await api.verifyAdminOtp({ email: email.trim().toLowerCase(), code: otp.trim() });
       setAdminLoginToken(res.adminLoginToken);
       setAdminStep('password');
     } catch (err) {
@@ -125,11 +114,12 @@ export function RolePortalPage({ role }: { role: PortalRole }) {
     e.preventDefault();
     setError('');
     setPendingApproval(false);
+
     setLoading(true);
     try {
       await login(
         isAdmin ? undefined : universityId,
-        email,
+        email.trim().toLowerCase(),
         password,
         role,
         isAdmin ? adminLoginToken : undefined,
@@ -150,13 +140,20 @@ export function RolePortalPage({ role }: { role: PortalRole }) {
 
   const sendResetOtp = async (e: React.FormEvent) => {
     e.preventDefault();
+    const address = email.trim().toLowerCase();
+    if (!address) return setError('Enter your email address');
+
     setError('');
     setInfo('');
     setLoading(true);
     try {
-      await api.requestPasswordResetOtp({ email: email.trim(), role });
+      const res = await api.requestPasswordResetOtp({ email: address, role });
+      setVerifiedEmail(res.identity);
+      setDelivery({ to: res.deliveredTo, notice: res.notice, devCode: res.devCode });
+      if (res.devCode) setOtp(res.devCode);
+      armCodeTimer(res.expiresInMinutes);
       setResetStep('otp');
-      setInfo(`Code sent to ${email.trim()}`);
+      setInfo(res.notice || `Code sent to ${res.deliveredTo}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to send code');
     } finally {
@@ -166,14 +163,15 @@ export function RolePortalPage({ role }: { role: PortalRole }) {
 
   const verifyResetOtp = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (codeExpired) return setError('That code expired. Send a new one.');
     if (!/^\d{6}$/.test(otp.trim())) return setError('Enter the 6-digit code');
     setError('');
     setLoading(true);
     try {
-      const res = await api.verifyPasswordResetOtp({ email: email.trim(), code: otp.trim() });
+      const res = await api.verifyPasswordResetOtp({ email: verifiedEmail, code: otp.trim() });
       setResetToken(res.resetToken);
       setResetStep('password');
-      setInfo('Email verified. Create a new password.');
+      setInfo('Verified. Create a new password.');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Invalid code');
     } finally {
@@ -188,11 +186,7 @@ export function RolePortalPage({ role }: { role: PortalRole }) {
     if (newPassword !== confirmPassword) return setError('Passwords do not match');
     setLoading(true);
     try {
-      await api.confirmPasswordReset({
-        resetToken,
-        newPassword,
-        confirmPassword,
-      });
+      await api.confirmPasswordReset({ resetToken, newPassword, confirmPassword });
       setResetStep('done');
       setInfo('Password updated. You can sign in now.');
       setPassword('');
@@ -203,366 +197,334 @@ export function RolePortalPage({ role }: { role: PortalRole }) {
     }
   };
 
+  const step = mode === 'reset'
+    ? `Reset · ${resetStep === 'email' ? 'Step 1 of 3' : resetStep === 'otp' ? 'Step 2 of 3' : 'Step 3 of 3'}`
+    : isAdmin
+      ? `Step ${adminStep === 'email' ? '1' : adminStep === 'otp' ? '2' : '3'} of 3`
+      : undefined;
+
+  const errorBlock = error ? <p className="authx__alert" role="alert">{error}</p> : null;
+  const deliveryNote = delivery?.notice
+    ? <p className="authx__note authx__note--warn" role="status"><Mail size={14} /> {delivery.notice}</p>
+    : null;
+  const deliveryCode = <DevOtpReveal code={delivery?.devCode} />;
+
   return (
-    <AuthLayout>
-      <motion.div
-        initial={{ opacity: 0, y: 20, scale: 0.98 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        transition={{ type: 'spring', stiffness: 280, damping: 24 }}
-        className="auth-card auth-card--portal"
-      >
-        <div className="auth-card-accent" />
-
-        <div className="mb-5">
-          <BrandLogo variant="full" />
-        </div>
-
-        <span className="auth-role-badge">{cfg.badge}</span>
-
-        <div
-          className="w-14 h-14 rounded-2xl flex items-center justify-center mb-4 mt-4 shadow-md"
-          style={{ background: HU_BRAND_GREEN }}
+    <AuthShell role={role} step={step}>
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={`${mode}-${mode === 'reset' ? resetStep : isAdmin ? adminStep : 'login'}`}
+          initial={{ opacity: 0, y: 14 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -10 }}
+          transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
         >
-          {mode === 'reset' ? <KeyRound size={26} className="text-white" /> : <Icon size={26} className="text-white" />}
-        </div>
+          {/* ── Sign in: student / teacher ── */}
+          {mode === 'login' && !isAdmin && (
+            <>
+              <h1 className="authx__title">{titles[role].title}</h1>
+              <p className="authx__subtitle">{titles[role].subtitle}</p>
 
-        <h1 className="text-2xl font-extrabold text-black tracking-tight">
-          {mode === 'reset' ? 'Forgot password' : cfg.title}
-        </h1>
+              <form onSubmit={handleSubmit} className="authx__form">
+                <input type="text" name="website" tabIndex={-1} autoComplete="off" aria-hidden="true" className="absolute -left-[9999px] h-0 w-0 opacity-0" defaultValue="" />
 
-        {mode === 'reset' && (
-          <p className="mt-2 text-sm text-black/70 font-semibold">
-            {resetStep === 'email' && 'Enter your email to receive a verification code.'}
-            {resetStep === 'otp' && 'Enter the code from ProjectHub email.'}
-            {resetStep === 'password' && 'Create your new password.'}
-            {resetStep === 'done' && 'Your password was updated.'}
-          </p>
-        )}
+                <div className="authx__field">
+                  <label className="authx__label" htmlFor={fieldId('university-id')}>University ID</label>
+                  <input
+                    id={fieldId('university-id')}
+                    className="authx__input"
+                    value={universityId}
+                    onChange={e => setUniversityId(e.target.value)}
+                    placeholder="HU000-1234"
+                    autoComplete="username"
+                    required
+                  />
+                </div>
 
-        {mode === 'login' && isAdmin && (
-          <div className="mt-4 flex items-center gap-2 welcome-body text-xs px-3 py-2.5 rounded-lg auth-notice auth-notice--admin">
-            <Lock size={14} style={{ color: HU_BRAND_GREEN, flexShrink: 0 }} />
-            {adminStep === 'email' ? 'Email → OTP → Password' : adminStep === 'otp' ? 'Enter OTP' : 'Enter password'}
-          </div>
-        )}
+                <div className="authx__field">
+                  <label className="authx__label" htmlFor={fieldId('email')}>Email address</label>
+                  <input
+                    id={fieldId('email')}
+                    type="email"
+                    className="authx__input"
+                    value={email}
+                    onChange={e => setEmail(e.target.value)}
+                    placeholder="you@hu.edu.so"
+                    autoComplete="email"
+                    required
+                  />
+                </div>
 
-        {/* ── Forgot password ── */}
-        {mode === 'reset' && resetStep === 'email' && (
-          <form onSubmit={sendResetOtp} className="space-y-4 mt-6">
-            <div>
-              <label className="auth-label">Email</label>
-              <input
-                type="email"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                placeholder="you@hu.edu"
-                className="auth-input"
-                autoComplete="email"
-                required
-              />
-            </div>
-            {error && <p className="text-sm text-red-700 font-bold bg-red-50 px-3 py-2.5 rounded-xl border border-red-100">{error}</p>}
-            <motion.button type="submit" disabled={loading} whileHover={{ scale: 1.01 }} className="auth-submit" style={{ background: HU_BRAND_GREEN }}>
-              <Mail size={18} />
-              {loading ? 'Sending…' : 'Send verification code'}
-            </motion.button>
-            <button type="button" onClick={backToLogin} className="w-full text-sm font-bold flex items-center justify-center gap-1.5" style={{ color: HU_BRAND_GREEN }}>
-              <ArrowLeft size={14} /> Back to sign in
-            </button>
-          </form>
-        )}
+                <div className="authx__field">
+                  <label className="authx__label" htmlFor={fieldId('password')}>Password</label>
+                  <div className="relative">
+                    <input
+                      id={fieldId('password')}
+                      type={showPassword ? 'text' : 'password'}
+                      className="authx__input authx__input--pill"
+                      value={password}
+                      onChange={e => setPassword(e.target.value)}
+                      autoComplete="current-password"
+                      required
+                    />
+                    <button type="button" className="authx__reveal" onClick={() => setShowPassword(v => !v)}>
+                      {showPassword ? 'Hide' : 'Show'}
+                    </button>
+                  </div>
+                  <button type="button" className="authx__link justify-self-start" onClick={openReset}>
+                    Forgot password?
+                  </button>
+                </div>
 
-        {mode === 'reset' && resetStep === 'otp' && (
-          <form onSubmit={verifyResetOtp} className="space-y-4 mt-6">
-            {info && <p className="text-xs text-green-800 bg-green-50 px-3 py-2 rounded-lg font-semibold">{info}</p>}
-            <div>
-              <label className="auth-label">OTP</label>
-              <input
-                value={otp}
-                onChange={e => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                placeholder="6-digit code"
-                inputMode="numeric"
-                className="auth-input font-mono tracking-widest text-center text-lg"
-                required
-              />
-            </div>
-            {error && <p className="text-sm text-red-700 font-bold bg-red-50 px-3 py-2.5 rounded-xl border border-red-100">{error}</p>}
-            <motion.button type="submit" disabled={loading} whileHover={{ scale: 1.01 }} className="auth-submit" style={{ background: HU_BRAND_GREEN }}>
-              <ShieldCheck size={18} />
-              {loading ? 'Checking…' : 'Verify code'}
-            </motion.button>
-            <button
-              type="button"
-              className="w-full text-sm font-semibold"
-              style={{ color: HU_BRAND_GREEN }}
-              onClick={() => { setResetStep('email'); setError(''); setOtp(''); }}
-            >
-              Change email
-            </button>
-          </form>
-        )}
+                {pendingApproval && (
+                  <p className="authx__note authx__note--wait" role="status">
+                    <WaitingMark size={16} />
+                    <span>Your {role} account is waiting for administrator approval. You will be emailed once it is approved.</span>
+                  </p>
+                )}
+                {errorBlock}
 
-        {mode === 'reset' && resetStep === 'password' && (
-          <form onSubmit={confirmReset} className="space-y-4 mt-6">
-            {info && <p className="text-xs text-green-800 bg-green-50 px-3 py-2 rounded-lg font-semibold flex items-center gap-2"><ShieldCheck size={14} /> {info}</p>}
-            <div>
-              <label className="auth-label">New password</label>
-              <input
-                type={showPassword ? 'text' : 'password'}
-                value={newPassword}
-                onChange={e => setNewPassword(e.target.value)}
-                className="auth-input"
-                autoComplete="new-password"
-                minLength={8}
-                required
-              />
-            </div>
-            <div>
-              <label className="auth-label">Confirm password</label>
-              <div className="relative">
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  value={confirmPassword}
-                  onChange={e => setConfirmPassword(e.target.value)}
-                  className="auth-input pr-16"
-                  autoComplete="new-password"
-                  minLength={8}
-                  required
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(v => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-extrabold text-black hover:text-green-800"
-                >
-                  {showPassword ? 'Hide' : 'Show'}
+                <button type="submit" className="authx__submit" disabled={loading}>
+                  <LogIn size={18} /> {loading ? 'Signing in…' : 'Sign in'}
                 </button>
-              </div>
-            </div>
-            {error && <p className="text-sm text-red-700 font-bold bg-red-50 px-3 py-2.5 rounded-xl border border-red-100">{error}</p>}
-            <motion.button type="submit" disabled={loading} whileHover={{ scale: 1.01 }} className="auth-submit" style={{ background: HU_BRAND_GREEN }}>
-              <KeyRound size={18} />
-              {loading ? 'Saving…' : 'Save new password'}
-            </motion.button>
-          </form>
-        )}
 
-        {mode === 'reset' && resetStep === 'done' && (
-          <div className="space-y-4 mt-6">
-            <div className="rounded-xl border-2 px-4 py-4 space-y-2" style={{ borderColor: `${HU_BRAND_GREEN}40`, background: '#f0fdf4' }}>
-              <p className="font-extrabold text-sm text-black flex items-center gap-2">
-                <ShieldCheck size={16} style={{ color: HU_BRAND_GREEN }} /> Password updated
+                <Link to={`/register?role=${role}`} className="authx__secondary">
+                  <UserPlus size={17} /> Create a new {role} account
+                </Link>
+              </form>
+            </>
+          )}
+
+          {/* ── Sign in: admin ── */}
+          {mode === 'login' && isAdmin && adminStep === 'email' && (
+            <>
+              <h1 className="authx__title">{titles.admin.title}</h1>
+              <p className="authx__subtitle">{titles.admin.subtitle}</p>
+
+              <form onSubmit={sendAdminOtp} className="authx__form">
+                <div className="authx__field">
+                  <label className="authx__label" htmlFor={fieldId('admin-email')}>Work email</label>
+                  <input
+                    id={fieldId('admin-email')}
+                    type="email"
+                    className="authx__input"
+                    value={email}
+                    onChange={e => setEmail(e.target.value)}
+                    placeholder="staff@hu.edu.so"
+                    autoComplete="email"
+                    required
+                  />
+                </div>
+
+                {errorBlock}
+                <button type="submit" className="authx__submit" disabled={loading}>
+                  <Lock size={18} /> {loading ? 'Sending…' : 'Send verification code'}
+                </button>
+                <button type="button" className="authx__link" onClick={openReset}>Forgot password?</button>
+              </form>
+            </>
+          )}
+
+          {mode === 'login' && isAdmin && adminStep === 'otp' && (
+            <>
+              <h1 className="authx__title">Enter your code</h1>
+              <p className="authx__subtitle">
+                Sent to <strong>{delivery?.to || email}</strong>.
               </p>
-              <p className="text-sm text-black/70 font-semibold">{info}</p>
-            </div>
-            <motion.button
-              type="button"
-              whileHover={{ scale: 1.01 }}
-              className="auth-submit"
-              style={{ background: HU_BRAND_GREEN }}
-              onClick={backToLogin}
-            >
-              <LogIn size={18} />
-              Sign in
-            </motion.button>
-          </div>
-        )}
 
-        {/* Student / teacher login */}
-        {mode === 'login' && !isAdmin && (
-          <form onSubmit={handleSubmit} className="space-y-4 mt-6">
-            <div>
-              <label className="auth-label">University ID (HU000)</label>
-              <input
-                value={universityId}
-                onChange={e => setUniversityId(e.target.value)}
-                placeholder="HU000-1234"
-                className="auth-input"
-                autoComplete="username"
-                required
-              />
-            </div>
-            <div>
-              <label className="auth-label">Email</label>
-              <input
-                type="email"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                placeholder="you@hu.edu"
-                className="auth-input"
-                autoComplete="email"
-                required
-              />
-            </div>
-            <div>
-              <label className="auth-label">Password</label>
-              <div className="relative">
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  value={password}
-                  onChange={e => setPassword(e.target.value)}
-                  className="auth-input pr-16"
-                  autoComplete="current-password"
-                  required
+              <form onSubmit={verifyAdminOtp} className="authx__form">
+                {deliveryNote}
+                {deliveryCode}
+                <OtpBoxes
+                  id={fieldId('admin-otp')}
+                  value={otp}
+                  onChange={setOtp}
+                  invalid={!!error}
+                  disabled={loading || codeExpired}
                 />
+                {codeExpiresAt > 0 && (
+                  <OtpCountdown expiresAt={codeExpiresAt} onExpire={() => setCodeExpired(true)} />
+                )}
+                {errorBlock}
+                <button type="submit" className="authx__submit" disabled={loading || codeExpired}>
+                  <ShieldCheck size={18} /> {loading ? 'Checking…' : 'Verify code'}
+                </button>
                 <button
                   type="button"
-                  onClick={() => setShowPassword(v => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-extrabold text-black hover:text-green-800"
+                  className="authx__link"
+                  onClick={() => { setAdminStep('email'); setError(''); setOtp(''); setCodeExpired(false); setCodeExpiresAt(0); }}
                 >
-                  {showPassword ? 'Hide' : 'Show'}
+                  {codeExpired ? 'Send a new code' : 'Change email address'}
                 </button>
-              </div>
-              <button
-                type="button"
-                onClick={openReset}
-                className="mt-2 text-xs font-extrabold hover:underline"
-                style={{ color: HU_BRAND_GREEN }}
-              >
-                Forgot password?
-              </button>
-            </div>
+              </form>
+            </>
+          )}
 
-            {pendingApproval && (
-              <div className="rounded-xl border-2 px-4 py-4 space-y-2" style={{ borderColor: `${HU_BRAND_GREEN}40`, background: '#f0fdf4' }}>
-                <p className="font-extrabold text-sm text-black">Pending approval</p>
-              </div>
-            )}
+          {mode === 'login' && isAdmin && adminStep === 'password' && (
+            <>
+              <h1 className="authx__title">Welcome back</h1>
+              <p className="authx__subtitle">Verification complete — enter your password to continue.</p>
 
-            {error && (
-              <p className="text-sm text-red-700 font-bold bg-red-50 px-3 py-2.5 rounded-xl border border-red-100">{error}</p>
-            )}
+              <form onSubmit={handleSubmit} className="authx__form">
+                <p className="authx__note" role="status"><ShieldCheck size={14} /> {email} verified</p>
+                <div className="authx__field">
+                  <label className="authx__label" htmlFor={fieldId('admin-password')}>Password</label>
+                  <div className="relative">
+                    <input
+                      id={fieldId('admin-password')}
+                      type={showPassword ? 'text' : 'password'}
+                      className="authx__input authx__input--pill"
+                      value={password}
+                      onChange={e => setPassword(e.target.value)}
+                      autoComplete="current-password"
+                      required
+                    />
+                    <button type="button" className="authx__reveal" onClick={() => setShowPassword(v => !v)}>
+                      {showPassword ? 'Hide' : 'Show'}
+                    </button>
+                  </div>
+                </div>
+                {errorBlock}
+                <button type="submit" className="authx__submit" disabled={loading}>
+                  <LogIn size={18} /> {loading ? 'Signing in…' : 'Sign in'}
+                </button>
+                <button type="button" className="authx__link" onClick={openReset}>Forgot password?</button>
+              </form>
+            </>
+          )}
 
-            <motion.button
-              type="submit"
-              disabled={loading}
-              whileHover={{ scale: 1.01 }}
-              whileTap={{ scale: 0.99 }}
-              className="auth-submit"
-              style={{ background: HU_BRAND_GREEN }}
-            >
-              <LogIn size={18} />
-              {loading ? 'Signing in…' : cfg.signInLabel}
-            </motion.button>
-          </form>
-        )}
+          {/* ── Forgot password ── */}
+          {mode === 'reset' && resetStep === 'email' && (
+            <>
+              <h1 className="authx__title">Forgot password</h1>
+              <p className="authx__subtitle">
+                Enter the email on your account and we will send a verification code.
+              </p>
 
-        {/* Admin login */}
-        {mode === 'login' && isAdmin && adminStep === 'email' && (
-          <form onSubmit={sendAdminOtp} className="space-y-4 mt-6">
-            <div>
-              <label className="auth-label">Email</label>
-              <input
-                type="email"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                placeholder="staff@hu.edu"
-                className="auth-input"
-                autoComplete="email"
-                required
-              />
-            </div>
-            {error && (
-              <p className="text-sm text-red-700 font-bold bg-red-50 px-3 py-2.5 rounded-xl border border-red-100">{error}</p>
-            )}
-            <motion.button type="submit" disabled={loading} whileHover={{ scale: 1.01 }} className="auth-submit" style={{ background: HU_BRAND_GREEN }}>
-              <Mail size={18} />
-              {loading ? 'Sending…' : 'Send OTP'}
-            </motion.button>
-            <button
-              type="button"
-              onClick={openReset}
-              className="w-full text-xs font-extrabold hover:underline"
-              style={{ color: HU_BRAND_GREEN }}
-            >
-              Forgot password?
-            </button>
-          </form>
-        )}
+              <form onSubmit={sendResetOtp} className="authx__form">
+                <div className="authx__field">
+                  <label className="authx__label" htmlFor={fieldId('reset-email')}>Email address</label>
+                  <input
+                    id={fieldId('reset-email')}
+                    type="email"
+                    className="authx__input"
+                    value={email}
+                    onChange={e => setEmail(e.target.value)}
+                    placeholder="you@hu.edu.so"
+                    autoComplete="email"
+                    required
+                  />
+                </div>
+                {errorBlock}
+                <button type="submit" className="authx__submit" disabled={loading}>
+                  <Mail size={18} />
+                  {loading ? 'Sending…' : 'Send verification code'}
+                </button>
+                <button type="button" className="authx__link" onClick={backToLogin}>
+                  <ArrowLeft size={13} /> Back to sign in
+                </button>
+              </form>
+            </>
+          )}
 
-        {mode === 'login' && isAdmin && adminStep === 'otp' && (
-          <form onSubmit={verifyAdminOtp} className="space-y-4 mt-6">
-            <p className="welcome-body text-sm">Code sent to <strong>{email}</strong></p>
-            <div>
-              <label className="auth-label">OTP</label>
-              <input
-                value={otp}
-                onChange={e => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                placeholder="6-digit code"
-                inputMode="numeric"
-                className="auth-input font-mono tracking-widest text-center text-lg"
-                required
-              />
-            </div>
-            {error && (
-              <p className="text-sm text-red-700 font-bold bg-red-50 px-3 py-2.5 rounded-xl border border-red-100">{error}</p>
-            )}
-            <motion.button type="submit" disabled={loading} whileHover={{ scale: 1.01 }} className="auth-submit" style={{ background: HU_BRAND_GREEN }}>
-              <ShieldCheck size={18} />
-              {loading ? 'Checking…' : 'Verify'}
-            </motion.button>
-            <button
-              type="button"
-              className="w-full text-sm font-semibold"
-              style={{ color: HU_BRAND_GREEN }}
-              onClick={() => { setAdminStep('email'); setError(''); setOtp(''); }}
-            >
-              Change email
-            </button>
-          </form>
-        )}
+          {mode === 'reset' && resetStep === 'otp' && (
+            <>
+              <h1 className="authx__title">Enter your code</h1>
+              <p className="authx__subtitle">Sent to <strong>{delivery?.to}</strong>.</p>
 
-        {mode === 'login' && isAdmin && adminStep === 'password' && (
-          <form onSubmit={handleSubmit} className="space-y-4 mt-6">
-            <p className="text-xs text-green-700 bg-green-50 px-3 py-2 rounded-lg flex items-center gap-2">
-              <ShieldCheck size={14} /> {email} verified
-            </p>
-            <div>
-              <label className="auth-label">Password</label>
-              <div className="relative">
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  value={password}
-                  onChange={e => setPassword(e.target.value)}
-                  className="auth-input pr-16"
-                  autoComplete="current-password"
-                  required
+              <form onSubmit={verifyResetOtp} className="authx__form">
+                {info && !delivery?.notice && <p className="authx__note" role="status"><ShieldCheck size={14} /> {info}</p>}
+                {deliveryNote}
+                {deliveryCode}
+                <OtpBoxes
+                  id={fieldId('reset-otp')}
+                  value={otp}
+                  onChange={setOtp}
+                  invalid={!!error}
+                  disabled={loading || codeExpired}
                 />
+                {codeExpiresAt > 0 && (
+                  <OtpCountdown expiresAt={codeExpiresAt} onExpire={() => setCodeExpired(true)} />
+                )}
+                {errorBlock}
+                <button type="submit" className="authx__submit" disabled={loading || codeExpired}>
+                  <ShieldCheck size={18} /> {loading ? 'Checking…' : 'Verify code'}
+                </button>
                 <button
                   type="button"
-                  onClick={() => setShowPassword(v => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-extrabold text-black hover:text-green-800"
+                  className="authx__link"
+                  onClick={() => { setResetStep('email'); setError(''); setOtp(''); setCodeExpired(false); setCodeExpiresAt(0); }}
                 >
-                  {showPassword ? 'Hide' : 'Show'}
+                  {codeExpired ? 'Send a new code' : 'Use a different email address'}
+                </button>
+              </form>
+            </>
+          )}
+
+          {mode === 'reset' && resetStep === 'password' && (
+            <>
+              <h1 className="authx__title">New password</h1>
+              <p className="authx__subtitle">Choose something at least 8 characters long.</p>
+
+              <form onSubmit={confirmReset} className="authx__form">
+                <div className="authx__field">
+                  <label className="authx__label" htmlFor={fieldId('new-password')}>New password</label>
+                  <input
+                    id={fieldId('new-password')}
+                    type={showPassword ? 'text' : 'password'}
+                    className="authx__input"
+                    value={newPassword}
+                    onChange={e => setNewPassword(e.target.value)}
+                    autoComplete="new-password"
+                    minLength={8}
+                    required
+                  />
+                </div>
+                <div className="authx__field">
+                  <label className="authx__label" htmlFor={fieldId('confirm-password')}>Confirm password</label>
+                  <div className="relative">
+                    <input
+                      id={fieldId('confirm-password')}
+                      type={showPassword ? 'text' : 'password'}
+                      className="authx__input authx__input--pill"
+                      value={confirmPassword}
+                      onChange={e => setConfirmPassword(e.target.value)}
+                      autoComplete="new-password"
+                      minLength={8}
+                      required
+                    />
+                    <button type="button" className="authx__reveal" onClick={() => setShowPassword(v => !v)}>
+                      {showPassword ? 'Hide' : 'Show'}
+                    </button>
+                  </div>
+                </div>
+                {errorBlock}
+                <button type="submit" className="authx__submit" disabled={loading}>
+                  <KeyRound size={18} /> {loading ? 'Saving…' : 'Save new password'}
+                </button>
+              </form>
+            </>
+          )}
+
+          {mode === 'reset' && resetStep === 'done' && (
+            <>
+              <h1 className="authx__title">Password updated</h1>
+              <p className="authx__subtitle">{info}</p>
+              <div className="authx__form">
+                <button type="button" className="authx__submit" onClick={backToLogin}>
+                  <LogIn size={18} /> Sign in
                 </button>
               </div>
-              <button
-                type="button"
-                onClick={openReset}
-                className="mt-2 text-xs font-extrabold hover:underline"
-                style={{ color: HU_BRAND_GREEN }}
-              >
-                Forgot password?
-              </button>
-            </div>
-            {error && (
-              <p className="text-sm text-red-700 font-bold bg-red-50 px-3 py-2.5 rounded-xl border border-red-100">{error}</p>
-            )}
-            <motion.button type="submit" disabled={loading} whileHover={{ scale: 1.01 }} className="auth-submit" style={{ background: HU_BRAND_GREEN }}>
-              <LogIn size={18} />
-              {loading ? 'Signing in…' : cfg.signInLabel}
-            </motion.button>
-          </form>
-        )}
+            </>
+          )}
+        </motion.div>
+      </AnimatePresence>
 
-        {mode === 'login' && cfg.canRegister && (
-          <Link to={`/register?role=${role}`} className="auth-secondary">
-            <UserPlus size={18} />
-            Create new {role} account
-          </Link>
-        )}
-
-        <AuthPortalLinks role={role} />
-      </motion.div>
-    </AuthLayout>
+      <div className="authx__switchers">
+        {role !== 'student' && <Link className="authx__switcher" to="/login/student">Student portal</Link>}
+        {role !== 'teacher' && <Link className="authx__switcher" to="/login/teacher">Teacher portal</Link>}
+        <Link className="authx__switcher" to="/">Homepage</Link>
+      </div>
+    </AuthShell>
   );
 }

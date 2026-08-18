@@ -1,8 +1,8 @@
 import { motion, AnimatePresence } from "motion/react";
 import {
-  LayoutDashboard, Sparkles, ClipboardList, AlertTriangle, Users,
+  LayoutDashboard, ClipboardList, Users,
   BarChart3, Globe, Settings, ChevronLeft, ChevronRight, LogOut,
-  GraduationCap, Activity, Scan, FolderKanban, MessageSquare, Bot
+  GraduationCap, Activity, Scan, FolderKanban, MessageSquare, Star
 } from "lucide-react";
 import { BrandLogo } from "./BrandLogo";
 import { roleAccent, roleActiveGradient } from "../config/brandTheme";
@@ -12,16 +12,15 @@ interface NavItem {
   icon: React.ComponentType<{ size?: number; className?: string }>;
   label: string;
   view: ViewId;
-  badgeKey?: "pendingReview" | "collisions";
+  badgeKey?: "pendingReview";
 }
 
 const teacherNav: NavItem[] = [
   { icon: LayoutDashboard, label: "Dashboard", view: "dashboard" },
-  { icon: Sparkles, label: "AI Review Queue", view: "ai-queue", badgeKey: "pendingReview" },
+  { icon: ClipboardList, label: "Review queue", view: "ai-queue", badgeKey: "pendingReview" },
   { icon: ClipboardList, label: "Class Assignments", view: "class-assignments" },
   { icon: MessageSquare, label: "Messages", view: "messages" },
   { icon: ClipboardList, label: "All Submissions", view: "submissions" },
-  { icon: AlertTriangle, label: "Collision Alerts", view: "collisions", badgeKey: "collisions" },
   { icon: Users, label: "Students", view: "students" },
   { icon: BarChart3, label: "Reports & Export", view: "analytics" },
   { icon: Globe, label: "Project Atlas", view: "atlas" },
@@ -33,7 +32,7 @@ const adminNav: NavItem[] = [
   { icon: MessageSquare, label: "Messages", view: "messages" },
   { icon: Users, label: "All Users", view: "students" },
   { icon: Activity, label: "System Health", view: "system-health" },
-  { icon: Scan, label: "Batch AI Scanner", view: "batch-scanner" },
+  { icon: Scan, label: "Originality scanner", view: "batch-scanner" },
   { icon: ClipboardList, label: "All Submissions", view: "submissions" },
   { icon: Globe, label: "Project Atlas", view: "atlas" },
   { icon: Settings, label: "Settings", view: "settings" },
@@ -42,13 +41,12 @@ const adminNav: NavItem[] = [
 const studentNav: NavItem[] = [
   { icon: LayoutDashboard, label: "My Dashboard", view: "dashboard" },
   { icon: FolderKanban, label: "My Projects", view: "submissions" },
-  { icon: Bot, label: "Athena Coach", view: "ai-coach" },
   { icon: ClipboardList, label: "Class Assignments", view: "class-assignments" },
-  { icon: GraduationCap, label: "My Teacher", view: "teacher-chat" },
+  { icon: GraduationCap, label: "My teachers", view: "teacher-chat" },
   { icon: MessageSquare, label: "Messages", view: "messages" },
   { icon: Users, label: "My Team", view: "team" },
   { icon: BarChart3, label: "My Progress", view: "scores" },
-  { icon: MessageSquare, label: "Feedback", view: "feedback" },
+  { icon: Star, label: "Feedback", view: "feedback" },
   { icon: Globe, label: "Project Atlas", view: "atlas" },
   { icon: Settings, label: "Settings", view: "settings" },
 ];
@@ -65,14 +63,13 @@ interface SidebarProps {
   role: Role;
   collapsed: boolean;
   activeView: ViewId;
-  badgeCounts?: { pendingReview?: number; collisions?: number };
+  badgeCounts?: { pendingReview?: number };
   onToggle: () => void;
   onNavigate: (view: ViewId) => void;
   onLogout: () => void;
-  onSettings: () => void;
 }
 
-export function Sidebar({ role, collapsed, activeView, badgeCounts, onToggle, onNavigate, onLogout, onSettings }: SidebarProps) {
+export function Sidebar({ role, collapsed, activeView, badgeCounts, onToggle, onNavigate, onLogout }: SidebarProps) {
   const navItems = navByRole[role];
   const roleLabel = role.charAt(0).toUpperCase() + role.slice(1);
   const roleColor = roleAccent(role);
@@ -123,8 +120,8 @@ export function Sidebar({ role, collapsed, activeView, badgeCounts, onToggle, on
           return (
             <motion.button key={item.view} onClick={() => onNavigate(item.view)}
               whileHover={{ x: collapsed ? 0 : 2 }} whileTap={{ scale: 0.97 }}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-150 group relative ${
-                isActive ? "text-white shadow-sm" : "text-gray-600 hover:bg-green-50/80"
+              className={`app-sidebar-link w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-150 group relative ${
+                isActive ? "is-active text-white shadow-sm" : "text-gray-600"
               }`}
               style={isActive ? { background: roleActiveGradient(role) } : {}}>
               <item.icon size={18} className="flex-shrink-0" />
@@ -153,12 +150,7 @@ export function Sidebar({ role, collapsed, activeView, badgeCounts, onToggle, on
         })}
       </nav>
 
-      <div className="p-3 border-t border-border space-y-1">
-        <motion.button whileHover={{ x: collapsed ? 0 : 2 }} onClick={onSettings}
-          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-gray-600 hover:bg-green-50/80">
-          <Settings size={18} className="flex-shrink-0" />
-          {!collapsed && <span style={{ fontSize: 14, fontWeight: 500 }}>Settings</span>}
-        </motion.button>
+      <div className="p-3 border-t border-border">
         <motion.button whileHover={{ x: collapsed ? 0 : 2 }} onClick={onLogout}
           className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-red-500 hover:bg-red-50">
           <LogOut size={18} className="flex-shrink-0" />

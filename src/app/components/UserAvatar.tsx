@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import type { Role } from '../types';
 
 const avatarGradients: Record<Role, string> = {
@@ -22,6 +23,14 @@ const sizeMap = {
   xl: { box: 96, font: 28 },
 };
 
+function initialsOf(firstName = '', lastName = '') {
+  const first = firstName.trim();
+  const last = lastName.trim();
+  const letters = `${first.charAt(0)}${last.charAt(0)}`.toUpperCase();
+  if (letters) return letters;
+  return (first || last).slice(0, 2).toUpperCase() || '?';
+}
+
 export function UserAvatar({
   firstName = '',
   lastName = '',
@@ -30,16 +39,23 @@ export function UserAvatar({
   size = 'md',
   className = '',
 }: UserAvatarProps) {
-  const initials = `${firstName[0] || ''}${lastName[0] || ''}`.toUpperCase() || '?';
+  const initials = initialsOf(firstName, lastName);
   const { box, font } = sizeMap[size];
+  const [imageFailed, setImageFailed] = useState(false);
+  const photo = profileImageUrl?.trim() || '';
 
-  if (profileImageUrl) {
+  useEffect(() => {
+    setImageFailed(false);
+  }, [photo]);
+
+  if (photo && !imageFailed) {
     return (
       <img
-        src={profileImageUrl}
+        src={photo}
         alt={`${firstName} ${lastName}`.trim() || 'Profile'}
         className={`rounded-full object-cover flex-shrink-0 ring-2 ring-white shadow-sm ${className}`}
         style={{ width: box, height: box }}
+        onError={() => setImageFailed(true)}
       />
     );
   }
@@ -54,6 +70,8 @@ export function UserAvatar({
         fontSize: font,
         fontWeight: 700,
       }}
+      aria-hidden={!firstName && !lastName}
+      title={`${firstName} ${lastName}`.trim() || undefined}
     >
       {initials}
     </div>

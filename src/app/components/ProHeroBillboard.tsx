@@ -10,7 +10,7 @@ import {
 import {
   GraduationCap,
   Briefcase,
-  Sparkles,
+  ClipboardCheck,
   ShieldCheck,
   ArrowRight,
 } from 'lucide-react';
@@ -128,7 +128,7 @@ export function ProHeroBillboard() {
           animate={{ opacity: 1 }}
           transition={{ delay: 0.4, duration: 0.6 }}
         >
-          <li><Sparkles size={13} /> Athena AI</li>
+          <li><ClipboardCheck size={13} /> Teacher review</li>
           <li><ShieldCheck size={13} /> HU ID</li>
           <li><GraduationCap size={13} /> Student</li>
           <li><Briefcase size={13} /> Teacher</li>

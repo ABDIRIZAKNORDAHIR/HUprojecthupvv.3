@@ -8,20 +8,8 @@ let tableReady = false;
 
 async function ensureTable() {
   if (tableReady) return;
-  await query(`
-    CREATE TABLE IF NOT EXISTS EmailOtps (
-      OtpId INT AUTO_INCREMENT PRIMARY KEY,
-      Email VARCHAR(255) NOT NULL,
-      Purpose VARCHAR(40) NOT NULL,
-      CodeHash VARCHAR(255) NOT NULL,
-      PayloadJson TEXT NULL,
-      ExpiresAt DATETIME NOT NULL,
-      Attempts INT NOT NULL DEFAULT 0,
-      ConsumedAt DATETIME NULL,
-      CreatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      INDEX IX_EmailOtps_EmailPurpose (Email, Purpose)
-    )
-  `);
+  // Database setup owns dialect-specific DDL; this verifies it ran successfully.
+  await query('SELECT TOP 1 OtpId FROM EmailOtps');
   tableReady = true;
 }
 
@@ -33,19 +21,62 @@ function generateCode() {
   return String(crypto.randomInt(100000, 999999));
 }
 
+/** Outside production the code can be shown on screen when no mailbox is wired. */
+function allowDevOtpReveal() {
+  return process.env.NODE_ENV !== 'production';
+}
+
+/** Development-only console delivery so signup is testable before SMTP exists. */
+function devEchoCode(target, code, minutes) {
+  if (!allowDevOtpReveal()) return false;
+  console.log(
+    `\n[OTP][development] No email transport configured.\n` +
+    `        code for ${target}: ${code} (valid ${minutes} minutes)\n`
+  );
+  return true;
+}
+
 /**
- * Send OTP by email, then store it.
+ * Email a one-time code and store its hash. The email address is the lookup key
+ * for verification.
+ *
  * Old codes are only invalidated after a successful send (avoids killing a good code on retry races).
  */
-export async function issueOtp({ email, purpose, payload = null }) {
+export async function issueOtp({ identity, email, purpose, payload = null }) {
   await ensureTable();
-  const normalized = String(email).toLowerCase().trim();
+  const target = String(identity ?? email ?? '').trim();
+  if (!target) {
+    const err = new Error('Enter your email address');
+    err.status = 400;
+    throw err;
+  }
+
+  const key = target.toLowerCase();
   const code = generateCode();
   const codeHash = await bcrypt.hash(code, 10);
   const minutes = ttlMinutes();
   const expiresAt = new Date(Date.now() + minutes * 60 * 1000);
 
-  if (!isMailConfigured()) {
+  const label =
+    purpose === 'admin_login' ? 'admin login'
+    : purpose === 'password_reset' ? 'password reset'
+    : 'registration';
+
+  let notice = null;
+  /** Only ever set outside production when SMTP is not configured. */
+  let devCode = null;
+
+  if (isMailConfigured()) {
+    const mail = await sendOtpEmail(key, code, label);
+    if (!mail.sent) {
+      const err = new Error(mail.reason || 'Failed to send verification email');
+      err.code = 'smtp_send_failed';
+      throw err;
+    }
+  } else if (devEchoCode(key, code, minutes)) {
+    devCode = code;
+    notice = 'Email sending is not configured yet — use the development code shown below.';
+  } else {
     const err = new Error(
       'Email sending is not configured. Set SMTP_PASS in .env (Gmail App Password) and restart the server.'
     );
@@ -53,29 +84,18 @@ export async function issueOtp({ email, purpose, payload = null }) {
     throw err;
   }
 
-  const label =
-    purpose === 'admin_login' ? 'admin login'
-    : purpose === 'password_reset' ? 'password reset'
-    : 'registration';
-  const mail = await sendOtpEmail(normalized, code, label);
-  if (!mail.sent) {
-    const err = new Error(mail.reason || 'Failed to send verification email');
-    err.code = 'smtp_send_failed';
-    throw err;
-  }
-
-  // Invalidate previous codes only after the new email was accepted by Gmail
+  // Invalidate previous codes only after the new code was accepted by the provider
   await query(
     `UPDATE EmailOtps SET ConsumedAt = CURRENT_TIMESTAMP
      WHERE Email = @email AND Purpose = @purpose AND ConsumedAt IS NULL`,
-    { email: normalized, purpose }
+    { email: key, purpose }
   );
 
   await query(
     `INSERT INTO EmailOtps (Email, Purpose, CodeHash, PayloadJson, ExpiresAt, Attempts)
      VALUES (@email, @purpose, @codeHash, @payload, @expiresAt, 0)`,
     {
-      email: normalized,
+      email: key,
       purpose,
       codeHash,
       payload: payload ? JSON.stringify(payload) : null,
@@ -85,34 +105,38 @@ export async function issueOtp({ email, purpose, payload = null }) {
 
   return {
     ok: true,
-    email: normalized,
+    identity: key,
+    email: key,
     expiresInMinutes: minutes,
     emailed: true,
+    deliveredTo: key,
+    notice,
+    ...(devCode ? { devCode } : {}),
   };
 }
 
-export async function verifyOtp({ email, purpose, code }) {
+export async function verifyOtp({ identity, email, purpose, code }) {
   await ensureTable();
-  const normalized = String(email).toLowerCase().trim();
+  const normalized = String(identity ?? email ?? '').trim().toLowerCase();
   const otpCode = String(code || '').replace(/\s+/g, '');
   if (!/^\d{6}$/.test(otpCode)) {
-    return { ok: false, error: 'Enter the 6-digit code from your email' };
+    return { ok: false, error: 'Enter the 6-digit code we sent you' };
   }
 
-  // Prefer non-expired rows; allow 2 minutes clock skew via DATE_ADD
+  // Hard cut-off: once ExpiresAt passes, the code is dead with no grace period.
+  const threshold = new Date();
   const rows = await query(
-    `SELECT OtpId, CodeHash, PayloadJson, ExpiresAt, Attempts
+    `SELECT TOP 1 OtpId, CodeHash, PayloadJson, ExpiresAt, Attempts
      FROM EmailOtps
      WHERE Email = @email AND Purpose = @purpose AND ConsumedAt IS NULL
-       AND ExpiresAt > DATE_SUB(NOW(), INTERVAL 2 MINUTE)
-     ORDER BY OtpId DESC
-     LIMIT 1`,
-    { email: normalized, purpose }
+       AND ExpiresAt > @threshold
+     ORDER BY OtpId DESC`,
+    { email: normalized, purpose, threshold }
   );
 
   if (!rows.recordset.length) {
     const any = await query(
-      `SELECT OtpId FROM EmailOtps WHERE Email = @email AND Purpose = @purpose ORDER BY OtpId DESC LIMIT 1`,
+      `SELECT TOP 1 OtpId FROM EmailOtps WHERE Email = @email AND Purpose = @purpose ORDER BY OtpId DESC`,
       { email: normalized, purpose }
     );
     if (!any.recordset.length) {
@@ -132,7 +156,7 @@ export async function verifyOtp({ email, purpose, code }) {
       `UPDATE EmailOtps SET Attempts = Attempts + 1 WHERE OtpId = @id`,
       { id: row.OtpId }
     );
-    return { ok: false, error: 'Wrong code. Check the newest email (older codes stop working).' };
+    return { ok: false, error: 'Wrong code. Check the newest message (older codes stop working).' };
   }
 
   await query(
@@ -149,5 +173,5 @@ export async function verifyOtp({ email, purpose, code }) {
     }
   }
 
-  return { ok: true, email: normalized, payload };
+  return { ok: true, identity: normalized, email: normalized, payload };
 }

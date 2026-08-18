@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Search, Bell, Sparkles, LogOut, Zap } from "lucide-react";
+import { Search, Bell, LogOut } from "lucide-react";
 import { useNavigate } from "react-router";
 import type { Role } from "../types";
 import { api } from "../api/client";
@@ -29,7 +29,7 @@ export function Header({ role, userName, profileImageUrl, firstName, lastName, o
 
   const unreadCount = notifications.filter(n => n.unread).length;
 
-  const loadNotifications = () => {
+  const loadNotifications = useCallback(() => {
     if (role === 'student') {
       api.getNotifications().then(r => setNotifications(r.notifications.map(n => ({
         id: n.id, title: n.title, description: n.description, time: n.time, unread: n.unread,
@@ -58,7 +58,6 @@ export function Header({ role, userName, profileImageUrl, firstName, lastName, o
         .then(([summary, adminStats]) => {
           const items: typeof notifications = [];
           const pendingReview = summary.pendingReview || 0;
-          const collisions = summary.collisions || 0;
           const pendingAccounts = (adminStats.pendingAccounts as number) || 0;
           if (pendingAccounts > 0) {
             items.push({
@@ -73,22 +72,16 @@ export function Header({ role, userName, profileImageUrl, firstName, lastName, o
               time: new Date().toISOString(), unread: true, type: 'review', relatedProjectId: null,
             });
           }
-          if (collisions > 0) {
-            items.push({
-              id: 2, title: 'Collision Alerts', description: `${collisions} similar projects detected`,
-              time: new Date().toISOString(), unread: true, type: 'collision', relatedProjectId: null,
-            });
-          }
           setNotifications(items);
         }).catch(() => {});
     }
-  };
+  }, [role]);
 
   useEffect(() => {
     loadNotifications();
     const interval = setInterval(loadNotifications, 45000);
     return () => clearInterval(interval);
-  }, [role, userName]);
+  }, [loadNotifications]);
 
   const handleNotificationClick = (n: typeof notifications[0]) => {
     setShowNotifications(false);
@@ -105,7 +98,6 @@ export function Header({ role, userName, profileImageUrl, firstName, lastName, o
     else if (role === 'student') navigate(t === 'evaluation' ? '/feedback' : '/messages');
     else if (role === 'admin') {
       if (n.type === 'account') navigate('/admin/users');
-      else if (n.type === 'collision') navigate('/collisions');
       else navigate('/admin/overview');
     }
   };
@@ -152,7 +144,7 @@ export function Header({ role, userName, profileImageUrl, firstName, lastName, o
           <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} onClick={onOpenQuickActions}
             className="app-ai-tools-btn hidden md:flex items-center gap-1.5 px-3 py-2 rounded-xl text-white text-sm shadow-sm"
             style={{ fontWeight: 600, fontSize: 13 }}>
-            <Zap size={15} /> AI Tools
+            Quick tools
           </motion.button>
         )}
 

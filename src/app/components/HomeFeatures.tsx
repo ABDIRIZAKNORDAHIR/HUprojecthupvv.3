@@ -1,8 +1,8 @@
 import { useRef } from 'react';
 import { motion, useMotionValue, useSpring, useMotionTemplate } from 'motion/react';
 import {
-  FolderKanban, Users, MessageSquare, Bot, ClipboardCheck, ShieldCheck, IdCard, BarChart3,
-  FileSearch, Sparkles, Lock, Layers,
+  FolderKanban, Users, MessageSquare, ClipboardCheck, ShieldCheck, IdCard, BarChart3,
+  FileSearch, Lock, Layers,
 } from 'lucide-react';
 import { HU_BRAND_GREEN } from '../config/appImages';
 
@@ -11,12 +11,12 @@ const capabilities = [
   { icon: FolderKanban, title: 'Projects' },
   { icon: Users, title: 'Teams' },
   { icon: MessageSquare, title: 'Chat' },
-  { icon: Bot, title: 'AI review' },
+  { icon: ClipboardCheck, title: 'Review' },
   { icon: ClipboardCheck, title: 'Workflow' },
   { icon: BarChart3, title: 'Progress' },
   { icon: ShieldCheck, title: 'Secure' },
   { icon: FileSearch, title: 'Atlas' },
-  { icon: Sparkles, title: 'Insights' },
+  { icon: BarChart3, title: 'Reports' },
   { icon: Lock, title: 'Roles' },
   { icon: Layers, title: 'Archive' },
 ];
